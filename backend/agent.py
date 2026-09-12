@@ -273,11 +273,13 @@ async def _llamar_agente(mensaje_usuario: str | None, conversation_id: str) -> d
     }
 
     if not gasto_por_categoria:
+        # components=[] -- el frontend ya tiene su propio estado vacío
+        # ("No hay resultados para esta consulta" + botón volver al resumen),
+        # más consistente que armar un text_block propio para este caso.
         return {
             "version": "1.0",
             "intent": "entender_gastos",
             "conversation_id": conversation_id,
-            "message": "No encontré gastos registrados en ese periodo.",
             "components": [],
         }
 
@@ -290,11 +292,12 @@ async def _llamar_agente(mensaje_usuario: str | None, conversation_id: str) -> d
         "version": "1.0",
         "intent": "entender_gastos",
         "conversation_id": conversation_id,
-        # Campo adicional, no forma parte todavía del tipo A2UIEnvelope del
-        # frontend -- es seguro mandarlo desde ya (no rompe nada), y queda
-        # disponible para cuando el frontend decida mostrarlo.
-        "message": decision["mensaje"],
         "components": [
+            {
+                "id": "insight",
+                "type": "text_block",
+                "props": {"title": decision["mensaje"]},
+            },
             {
                 "id": "spending_overview",
                 "type": decision["variante"],
@@ -303,7 +306,7 @@ async def _llamar_agente(mensaje_usuario: str | None, conversation_id: str) -> d
                     "total_spent": total_spent,
                     "categories": categorias,
                 },
-            }
+            },
         ],
     }
 
