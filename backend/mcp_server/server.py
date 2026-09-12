@@ -39,6 +39,21 @@ TOPE_MESES = 3
 
 _gemini_client: genai.Client | None = None
 
+
+def _primera_key() -> str:
+    """Acepta `GEMINI_API_KEYS` (plural) o `GEMINI_API_KEY`, igual que el agente.
+
+    Este proceso no rota keys como `agent.py`: el fallback de clasificación
+    casi nunca se dispara (el diccionario cubre todos los comercios
+    sintéticos), así que basta con tomar la primera y no reventar por leer
+    la variable equivocada.
+    """
+    varias = os.environ.get("GEMINI_API_KEYS", "").strip()
+    if varias:
+        return varias.split(",")[0].strip()
+    return os.environ.get("GEMINI_API_KEY", "").strip()
+
+
 _ITEM_CLASIFICACION = types.Schema(
     type=types.Type.OBJECT,
     properties={
@@ -59,7 +74,7 @@ def _clasificar_con_gemini(conceptos: list[str], categorias_validas: list[str]) 
     """
     global _gemini_client
     if _gemini_client is None:
-        _gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        _gemini_client = genai.Client(api_key=_primera_key())
 
     prompt = f"""Clasifica cada uno de estos conceptos de transacción bancaria
 en UNA de estas categorías válidas: {categorias_validas}.
