@@ -48,10 +48,8 @@ def _primera_key() -> str:
     sintéticos), así que basta con tomar la primera y no reventar por leer
     la variable equivocada.
     """
-    varias = os.environ.get("GEMINI_API_KEYS", "").strip()
-    if varias:
-        return varias.split(",")[0].strip()
-    return os.environ.get("GEMINI_API_KEY", "").strip()
+    crudo = os.environ.get("GEMINI_API_KEYS", "") or os.environ.get("GEMINI_API_KEY", "")
+    return next((k.strip() for k in crudo.split(",") if k.strip()), "")
 
 
 _ITEM_CLASIFICACION = types.Schema(

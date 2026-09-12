@@ -105,11 +105,15 @@ app.add_middleware(
 
 
 def _keys_configuradas() -> list[str]:
-    varias = os.environ.get("GEMINI_API_KEYS", "").strip()
-    if varias:
-        return [k.strip() for k in varias.split(",") if k.strip()]
-    unica = os.environ.get("GEMINI_API_KEY", "").strip()
-    return [unica] if unica else []
+    """Lee las keys de GEMINI_API_KEYS o GEMINI_API_KEY, indistintamente.
+
+    Ambos nombres aceptan varias separadas por comas: poner la lista en la
+    variable en singular es un error fácil de cometer, y si se tomara el
+    texto completo como una sola key fallaría cada llamada por credencial
+    inválida, que es de las cosas más molestas de diagnosticar.
+    """
+    crudo = os.environ.get("GEMINI_API_KEYS", "") or os.environ.get("GEMINI_API_KEY", "")
+    return [k.strip() for k in crudo.split(",") if k.strip()]
 
 
 _KEYS = _keys_configuradas()
