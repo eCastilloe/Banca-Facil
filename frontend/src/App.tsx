@@ -3,16 +3,25 @@ import type { A2UIEnvelope } from "./types/a2ui";
 import { ComponentRenderer } from "./components/registry";
 import { newConversationId, sendAction, sendMessage } from "./lib/api";
 
-type Turn =
-  | { kind: "user"; id: string; text: string }
-  | { kind: "agent"; id: string; envelope: A2UIEnvelope }
-  | { kind: "system"; id: string; text: string };
-
 export default function App() {
   const conversationId = useRef(newConversationId());
-  const [turns, setTurns] = useState<Turn[]>([]);
+
+  // Una sola pantalla activa a la vez: cada respuesta del agente la
+  // REEMPLAZA (clic en categoría, "volver al resumen", nueva pregunta),
+  // nunca se apila. `viewKey` solo sirve para retriggerear la animación
+  // de entrada cuando cambia el contenido.
+  const [view, setView] = useState<A2UIEnvelope | null>(null);
+  const [viewKey, setViewKey] = useState(0);
+  const [lastQuestion, setLastQuestion] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  function showView(envelope: A2UIEnvelope) {
+    setView(envelope);
+    setViewKey((k) => k + 1);
+    setError(null);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -20,11 +29,11 @@ export default function App() {
     if (!text || isLoading) return;
 
     setInput("");
-    setTurns((prev) => [...prev, { kind: "user", id: crypto.randomUUID(), text }]);
+    setLastQuestion(text);
     setIsLoading(true);
     try {
       const envelope = await sendMessage(text, conversationId.current);
-      setTurns((prev) => [...prev, { kind: "agent", id: crypto.randomUUID(), envelope }]);
+      showView(envelope);
     } finally {
       setIsLoading(false);
     }
@@ -35,12 +44,9 @@ export default function App() {
     setIsLoading(true);
     try {
       const envelope = await sendAction(conversationId.current, actionId, params);
-      setTurns((prev) => [...prev, { kind: "agent", id: crypto.randomUUID(), envelope }]);
+      showView(envelope);
     } catch (err) {
-      setTurns((prev) => [
-        ...prev,
-        { kind: "system", id: crypto.randomUUID(), text: err instanceof Error ? err.message : String(err) },
-      ]);
+      setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsLoading(false);
     }
@@ -48,47 +54,37 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <div className="app-topbar" />
+
       <header className="app-header">
-        <span className="app-eyebrow">Banorte × Tec</span>
+        <span className="brand">BANORTE</span>
         <h1>Entender mis gastos</h1>
       </header>
 
-      <main className="chat-log">
-        {turns.length === 0 && (
-          <div className="chat-empty">
+      {lastQuestion && <div className="last-question">"{lastQuestion}"</div>}
+
+      <main className="screen">
+        {!view && !isLoading && (
+          <div className="screen-empty">
             Pregunta algo como <em>"¿en qué se me fue el dinero este trimestre?"</em> para empezar.
           </div>
         )}
 
-        {turns.map((turn) => {
-          if (turn.kind === "user") {
-            return (
-              <div key={turn.id} className="chat-row chat-row--user">
-                <div className="chat-bubble">{turn.text}</div>
-              </div>
-            );
-          }
-          if (turn.kind === "system") {
-            return (
-              <div key={turn.id} className="chat-row chat-row--system">
-                {turn.text}
-              </div>
-            );
-          }
-          return (
-            <div key={turn.id} className="chat-row chat-row--agent">
-              {turn.envelope.components.map((component) => (
-                <ComponentRenderer
-                  key={component.id}
-                  component={component}
-                  onAction={(actionId, params) => handleAction(actionId, params)}
-                />
-              ))}
-            </div>
-          );
-        })}
+        {isLoading && <div className="screen-loading">Pensando…</div>}
 
-        {isLoading && <div className="chat-row chat-row--system">Pensando…</div>}
+        {view && !isLoading && (
+          <div key={viewKey} className="screen-content">
+            {view.components.map((component) => (
+              <ComponentRenderer
+                key={component.id}
+                component={component}
+                onAction={(actionId, params) => handleAction(actionId, params)}
+              />
+            ))}
+          </div>
+        )}
+
+        {error && <div className="screen-error">{error}</div>}
       </main>
 
       <form className="chat-input" onSubmit={handleSubmit}>
