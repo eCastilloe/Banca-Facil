@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { A2UIEnvelope } from "./types/a2ui";
 import { ComponentRenderer } from "./components/registry";
-import { newConversationId, sendAction, sendMessage } from "./lib/api";
+import { loadDefaultOverview, newConversationId, sendAction, sendMessage } from "./lib/api";
 
 export default function App() {
   const conversationId = useRef(newConversationId());
@@ -15,13 +15,29 @@ export default function App() {
   const [lastQuestion, setLastQuestion] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   function showView(envelope: A2UIEnvelope) {
     setView(envelope);
     setViewKey((k) => k + 1);
     setError(null);
   }
+
+  // Al abrir la app ya se ve el resumen (pie chart) sin tener que
+  // preguntar nada primero.
+  useEffect(() => {
+    let cancelled = false;
+    loadDefaultOverview(conversationId.current).then((envelope) => {
+      if (!cancelled) {
+        showView(envelope);
+        setIsLoading(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -57,47 +73,51 @@ export default function App() {
       <div className="app-topbar" />
 
       <header className="app-header">
-        <span className="brand">BANORTE</span>
-        <h1>Entender mis gastos</h1>
+        <div className="app-header-inner">
+          <span className="brand">BANORTE</span>
+          <h1>Entender mis gastos</h1>
+        </div>
       </header>
 
-      {lastQuestion && <div className="last-question">"{lastQuestion}"</div>}
-
       <main className="screen">
-        {!view && !isLoading && (
-          <div className="screen-empty">
-            Pregunta algo como <em>"¿en qué se me fue el dinero este trimestre?"</em> para empezar.
-          </div>
-        )}
+        <div className="screen-inner">
+          {lastQuestion && (
+            <div className="chat-row chat-row--user">
+              <div className="chat-bubble">{lastQuestion}</div>
+            </div>
+          )}
 
-        {isLoading && <div className="screen-loading">Pensando…</div>}
+          {isLoading && <div className="screen-loading">Pensando…</div>}
 
-        {view && !isLoading && (
-          <div key={viewKey} className="screen-content">
-            {view.components.map((component) => (
-              <ComponentRenderer
-                key={component.id}
-                component={component}
-                onAction={(actionId, params) => handleAction(actionId, params)}
-              />
-            ))}
-          </div>
-        )}
+          {view && !isLoading && (
+            <div key={viewKey} className="screen-content">
+              {view.components.map((component) => (
+                <ComponentRenderer
+                  key={component.id}
+                  component={component}
+                  onAction={(actionId, params) => handleAction(actionId, params)}
+                />
+              ))}
+            </div>
+          )}
 
-        {error && <div className="screen-error">{error}</div>}
+          {error && <div className="screen-error">{error}</div>}
+        </div>
       </main>
 
       <form className="chat-input" onSubmit={handleSubmit}>
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Escribe tu pregunta…"
-          disabled={isLoading}
-        />
-        <button type="submit" disabled={isLoading || !input.trim()}>
-          Enviar
-        </button>
+        <div className="chat-input-inner">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Escribe tu pregunta…"
+            disabled={isLoading}
+          />
+          <button type="submit" disabled={isLoading || !input.trim()}>
+            Enviar
+          </button>
+        </div>
       </form>
     </div>
   );

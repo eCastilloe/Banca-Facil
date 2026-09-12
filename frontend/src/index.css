@@ -42,25 +42,32 @@ body {
 
 h1, h2, h3 { margin: 0; }
 
-/* --- layout --- */
+/* --- layout: la app ocupa toda la resolución disponible; el contenido
+   interno se centra en una columna legible (--content-width) para que no
+   se vea absurdo en pantallas anchas, pero el fondo/las barras sí llegan
+   de borde a borde. --- */
+
+:root { --content-width: 880px; }
 
 .app-shell {
-  max-width: 720px;
+  width: 100%;
   height: 100vh;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   background: var(--color-bg);
-  border-left: 1px solid var(--color-border-soft);
-  border-right: 1px solid var(--color-border-soft);
 }
 
 .app-topbar { height: 4px; background: var(--color-primary); flex: none; }
 
 .app-header {
-  padding: 18px 20px 16px;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border-soft);
+}
+
+.app-header-inner {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 18px 24px 16px;
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -75,23 +82,21 @@ h1, h2, h3 { margin: 0; }
 
 .app-header h1 { font-size: 19px; font-weight: 700; color: var(--color-ink); }
 
-.last-question {
-  padding: 10px 20px;
-  font-size: 13px;
-  color: var(--color-ink-muted);
-  font-style: italic;
-  border-bottom: 1px solid var(--color-border-soft);
-  background: var(--color-surface);
-}
-
 /* --- pantalla única: se reemplaza en cada respuesta, no se acumula --- */
 
 .screen {
   flex: 1;
   overflow-y: auto;
-  padding: 20px;
+  padding: 24px;
+}
+
+.screen-inner {
+  max-width: var(--content-width);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
+  gap: 16px;
+  min-height: 100%;
 }
 
 .screen-empty {
@@ -109,7 +114,6 @@ h1, h2, h3 { margin: 0; }
 }
 
 .screen-error {
-  margin-top: 12px;
   padding: 10px 14px;
   border-radius: var(--radius-m);
   background: #fdecec;
@@ -127,12 +131,32 @@ h1, h2, h3 { margin: 0; }
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* mensaje del usuario — burbuja de chat real, no un subtítulo */
+
+.chat-row { display: flex; }
+.chat-row--user { justify-content: flex-end; }
+
+.chat-bubble {
+  background: var(--color-primary);
+  color: white;
+  padding: 10px 16px;
+  border-radius: var(--radius-l) var(--radius-l) 2px var(--radius-l);
+  max-width: 75%;
+  font-size: 14px;
+  font-weight: 500;
+}
+
 .chat-input {
-  display: flex;
-  gap: 8px;
-  padding: 14px 20px;
   background: var(--color-surface);
   border-top: 1px solid var(--color-border-soft);
+}
+
+.chat-input-inner {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  gap: 8px;
 }
 
 .chat-input input {

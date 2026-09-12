@@ -16,7 +16,16 @@ function delay(ms: number) {
 export async function sendMessage(_text: string, conversationId: string): Promise<A2UIEnvelope> {
   // TODO(backend): reemplazar por `fetch(POST /chat, {message: text, conversation_id})`
   await delay(300);
-  return mockOverview(conversationId);
+  return mockOverview(conversationId, "bar_chart");
+}
+
+/** Se llama una sola vez al abrir la app, sin que el usuario haya escrito
+ * nada — muestra el resumen de una vez en vez de esperar una pregunta.
+ * TODO(backend): reemplazar por el primer `GET/POST` que arranque la
+ * conversación con el resumen por default del periodo actual. */
+export async function loadDefaultOverview(conversationId: string): Promise<A2UIEnvelope> {
+  await delay(300);
+  return mockOverview(conversationId, "pie_chart");
 }
 
 export async function sendAction(
