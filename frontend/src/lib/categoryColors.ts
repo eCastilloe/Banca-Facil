@@ -3,16 +3,22 @@
  * explícita del equipo dejarlo del lado del frontend) — esta es una
  * propuesta inicial, ajústenla libremente sin que eso afecte al backend
  * ni al contrato de datos.
+ *
+ * Los tonos salen directo del design system real de Banorte (extraídos de
+ * banorte.com: --color_primario_100/300, --color_secundario_700,
+ * --color_positivo_100, --color_aviso_100, --color_gris_500/300), para
+ * que el desglose por categoría se sienta parte de la misma marca aunque
+ * necesite más matices de los que ellos exponen para texto/botones.
  */
 const PALETTE = [
-  "#6355e0", // despensa
-  "#0f9488", // comida
-  "#e0577a", // transporte
-  "#eab308", // servicios
-  "#38bdf8", // entretenimiento
-  "#22c55e", // salud
-  "#f97316", // compras
-  "#94a3b8", // otros / sin categorizar
+  "#EB0029", // despensa            — primario_100 (rojo Banorte)
+  "#323E48", // comida              — secundario_700 (tinta)
+  "#6CC04A", // transporte          — positivo_100 (verde)
+  "#F5BE64", // servicios           — aviso_100 (ámbar)
+  "#5B6670", // entretenimiento     — gris_600
+  "#8F0017", // compras             — primario_300 (rojo oscuro)
+  "#7B868C", // salud               — gris_500
+  "#C1C5C8", // otros/sin categorizar — gris_300
 ];
 
 const CATEGORY_ORDER = [
@@ -21,8 +27,8 @@ const CATEGORY_ORDER = [
   "transporte",
   "servicios",
   "entretenimiento",
-  "salud",
   "compras",
+  "salud",
   "otros",
 ];
 
