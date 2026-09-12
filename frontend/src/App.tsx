@@ -2,7 +2,35 @@ import { useEffect, useRef, useState } from "react";
 import type { A2UIEnvelope } from "./types/a2ui";
 import { ComponentRenderer } from "./components/registry";
 import { BankChrome } from "./components/BankChrome";
-import { loadDefaultOverview, newConversationId, sendAction, sendMessage } from "./lib/api";
+import { loadDefaultOverview, newConversationId, sendAction, sendMessage, SUGGESTED_PROMPTS } from "./lib/api";
+
+// Nombre del usuario demo — mismo que en los datos sintéticos de backend.
+// Cuando exista sesión real, esto viene del backend.
+const DEMO_USER_NAME = "Santiago";
+
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return `Buenos días, ${DEMO_USER_NAME}`;
+  if (hour < 19) return `Buenas tardes, ${DEMO_USER_NAME}`;
+  return `Buenas noches, ${DEMO_USER_NAME}`;
+}
+
+function SkeletonCard() {
+  return (
+    <div className="skeleton-card" aria-hidden="true">
+      <div className="skeleton-line skeleton-line--sm" />
+      <div className="skeleton-body">
+        <div className="skeleton-circle" />
+        <div className="skeleton-lines">
+          <div className="skeleton-line" />
+          <div className="skeleton-line" />
+          <div className="skeleton-line" />
+          <div className="skeleton-line" />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   const conversationId = useRef(newConversationId());
@@ -40,11 +68,8 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const text = input.trim();
+  async function ask(text: string) {
     if (!text || isLoading) return;
-
     setInput("");
     setLastQuestion(text);
     setIsLoading(true);
@@ -54,6 +79,11 @@ export default function App() {
     } finally {
       setIsLoading(false);
     }
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    ask(input.trim());
   }
 
   async function handleAction(actionId: string, params?: Record<string, unknown>) {
@@ -73,46 +103,68 @@ export default function App() {
     <div className="app-shell">
       <BankChrome />
 
-      <main className="screen">
-        <div className="screen-inner">
-          {lastQuestion && (
-            <div className="chat-row chat-row--user">
-              <div className="chat-bubble">{lastQuestion}</div>
-            </div>
-          )}
+      <div className="hero">
+        <div className="hero-inner">
+          <p className="hero-eyebrow">{greeting()}</p>
+          <h1 className="hero-title">Entender mis gastos</h1>
+          <p className="hero-subtitle">Pregúntale a tu asistente en qué se te fue el dinero.</p>
+        </div>
+      </div>
 
-          {isLoading && <div className="screen-loading">Pensando…</div>}
+      <div className="sheet">
+        <main className="screen">
+          <div className="screen-inner">
+            {lastQuestion && (
+              <div className="chat-row chat-row--user">
+                <div className="chat-bubble">{lastQuestion}</div>
+              </div>
+            )}
 
-          {view && !isLoading && (
-            <div key={viewKey} className="screen-content">
-              {view.components.map((component) => (
-                <ComponentRenderer
-                  key={component.id}
-                  component={component}
-                  onAction={(actionId, params) => handleAction(actionId, params)}
-                />
+            {isLoading && <SkeletonCard />}
+
+            {view && !isLoading && (
+              <div key={viewKey} className="screen-content">
+                {view.components.map((component) => (
+                  <ComponentRenderer
+                    key={component.id}
+                    component={component}
+                    onAction={(actionId, params) => handleAction(actionId, params)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {error && <div className="screen-error">{error}</div>}
+          </div>
+        </main>
+
+        {!lastQuestion && (
+          <div className="suggestions">
+            <div className="suggestions-inner">
+              {SUGGESTED_PROMPTS.map((prompt) => (
+                <button key={prompt} className="suggestion-chip" onClick={() => ask(prompt)} disabled={isLoading}>
+                  {prompt}
+                </button>
               ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {error && <div className="screen-error">{error}</div>}
-        </div>
-      </main>
-
-      <form className="chat-input" onSubmit={handleSubmit}>
-        <div className="chat-input-inner">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Escribe tu pregunta…"
-            disabled={isLoading}
-          />
-          <button type="submit" disabled={isLoading || !input.trim()}>
-            Enviar
-          </button>
-        </div>
-      </form>
+        <form className="chat-input" onSubmit={handleSubmit}>
+          <div className="chat-input-inner">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Escribe tu pregunta…"
+              disabled={isLoading}
+            />
+            <button type="submit" disabled={isLoading || !input.trim()}>
+              Enviar
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

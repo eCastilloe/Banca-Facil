@@ -2,10 +2,12 @@ import type { RendererProps } from "./types";
 import type { CategoryBreakdownProps } from "../types/a2ui";
 import { colorForCategory } from "../lib/categoryColors";
 import { formatMXN } from "../lib/format";
+import { useCountUp } from "../lib/useCountUp";
 
 export function PieChart({ component, onAction }: RendererProps) {
   const props = component.props as unknown as CategoryBreakdownProps;
   const { categories, period, total_spent } = props;
+  const animatedTotal = useCountUp(total_spent);
 
   let cursor = 0;
   const stops = categories.map((c) => {
@@ -30,7 +32,7 @@ export function PieChart({ component, onAction }: RendererProps) {
       <div className="breakdown-body breakdown-body--pie">
         <div className="pie" style={{ background: gradient }}>
           <div className="pie-hole">
-            <span className="pie-total">{formatMXN(total_spent)}</span>
+            <span className="pie-total">{formatMXN(animatedTotal)}</span>
             <span className="pie-total-label">gastado</span>
           </div>
         </div>

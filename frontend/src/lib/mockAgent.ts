@@ -8,6 +8,7 @@
  * lib/api.ts sin tocar ni el registry ni los componentes.
  */
 import type { A2UIEnvelope, TransactionItem } from "../types/a2ui";
+import { formatMXN } from "./format";
 
 const CATEGORIES = [
   { id: "despensa", label: "Despensa / supermercado", total: 4200, percent: 22.8 },
@@ -60,20 +61,37 @@ const TRANSACTIONS: Record<string, TransactionItem[]> = {
   otros: [{ id: "t15", date: "2026-07-30", description: "Cargo sin identificar", amount: -340.0 }],
 };
 
+function topCategory() {
+  return CATEGORIES.reduce((max, c) => (c.total > max.total ? c : max), CATEGORIES[0]);
+}
+
 /** El LLM decide libremente el `type` — en el mock lo simulamos con un
  * default de `pie_chart` (lo que se ve al abrir la app, sin que el usuario
  * tenga que preguntar nada), pero cuando la pregunta es explícita el mock
  * elige `bar_chart` por ser más legible con 8 categorías — igual que se
- * acordó que decidiría el modelo real caso por caso. */
+ * acordó que decidiría el modelo real caso por caso.
+ *
+ * También manda un `text_block` antes de la gráfica con el insight
+ * principal — que se sienta como que el agente interpretó los datos, no
+ * que solo desplegó una tabla. */
 export function mockOverview(
   conversationId: string,
   preferredType: "pie_chart" | "bar_chart" = "pie_chart",
 ): A2UIEnvelope {
+  const top = topCategory();
   return {
     version: "1.0",
     intent: "entender_gastos",
     conversation_id: conversationId,
     components: [
+      {
+        id: "spending_insight",
+        type: "text_block",
+        props: {
+          title: `Tu mayor gasto fue en ${top.label}`,
+          subtitle: `${formatMXN(top.total)} (${top.percent.toFixed(1)}% del total) en ${PERIOD.label.toLowerCase()}.`,
+        },
+      },
       {
         id: "spending_overview",
         type: preferredType,
@@ -104,6 +122,49 @@ export function mockCategoryDetail(conversationId: string, categoryId: string): 
           period: PERIOD,
           total: category?.total ?? 0,
           transactions,
+        },
+        actions: [{ id: "back_to_overview", label: "Volver al resumen" }],
+      },
+    ],
+  };
+}
+
+/** Atajo para la pregunta "¿en qué gasté más?" — va directo al detalle de
+ * la categoría más alta, sin pasar por el resumen. Demuestra que el
+ * agente puede interpretar una intención específica y saltar directo a
+ * la respuesta, no solo repetir el mismo componente siempre. */
+export function mockTopCategoryDetail(conversationId: string): A2UIEnvelope {
+  const top = topCategory();
+  const envelope = mockCategoryDetail(conversationId, top.id);
+  envelope.components.unshift({
+    id: "top_category_insight",
+    type: "text_block",
+    props: {
+      title: `Tu categoría con más gasto es ${top.label}`,
+      subtitle: `Representa el ${top.percent.toFixed(1)}% de lo que gastaste en ${PERIOD.label.toLowerCase()}.`,
+    },
+  });
+  return envelope;
+}
+
+/** Todas las transacciones del periodo, sin filtrar por categoría —
+ * ejercita el caso `category: undefined` de transaction_list. */
+export function mockAllTransactions(conversationId: string): A2UIEnvelope {
+  const all: TransactionItem[] = Object.values(TRANSACTIONS)
+    .flat()
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  return {
+    version: "1.0",
+    intent: "ver_categoria_detalle",
+    conversation_id: conversationId,
+    components: [
+      {
+        id: "all_transactions",
+        type: "transaction_list",
+        props: {
+          period: PERIOD,
+          total: TOTAL_SPENT,
+          transactions: all,
         },
         actions: [{ id: "back_to_overview", label: "Volver al resumen" }],
       },

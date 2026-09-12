@@ -3,6 +3,7 @@ import type { RendererProps } from "./types";
 import { PieChart } from "./PieChart";
 import { BarChart } from "./BarChart";
 import { TransactionList } from "./TransactionList";
+import { TextBlock } from "./TextBlock";
 import { UnknownComponent } from "./UnknownComponent";
 
 /**
@@ -17,6 +18,7 @@ const REGISTRY: Record<string, ComponentType<RendererProps>> = {
   pie_chart: PieChart,
   bar_chart: BarChart,
   transaction_list: TransactionList,
+  text_block: TextBlock,
 };
 
 export function ComponentRenderer({ component, onAction }: RendererProps) {

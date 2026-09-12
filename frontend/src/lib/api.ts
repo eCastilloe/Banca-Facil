@@ -1,5 +1,15 @@
 import type { A2UIEnvelope } from "../types/a2ui";
-import { mockOverview, mockCategoryDetail } from "./mockAgent";
+import { mockOverview, mockCategoryDetail, mockTopCategoryDetail, mockAllTransactions } from "./mockAgent";
+
+/** Preguntas de arranque rápido — bajan la fricción de la pantalla en
+ * blanco y, de paso, muestran la variedad de intenciones que el agente
+ * puede resolver dentro de "entender gastos". Cada una mapea a una
+ * respuesta distinta del mock (ver sendMessage). */
+export const SUGGESTED_PROMPTS = [
+  "¿En qué se me fue el dinero este trimestre?",
+  "¿En qué categoría gasté más?",
+  "Ver todas mis transacciones",
+];
 
 /**
  * Punto único de contacto con el agente. Hoy responde con datos
@@ -13,9 +23,19 @@ function delay(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export async function sendMessage(_text: string, conversationId: string): Promise<A2UIEnvelope> {
-  // TODO(backend): reemplazar por `fetch(POST /chat, {message: text, conversation_id})`
+export async function sendMessage(text: string, conversationId: string): Promise<A2UIEnvelope> {
+  // TODO(backend): reemplazar por `fetch(POST /chat, {message: text, conversation_id})`.
+  // Esta clasificación por palabras clave es puro relleno del mock — el
+  // LLM real interpretaría la intención de verdad, no haría un match de texto.
   await delay(300);
+  const q = text.toLowerCase();
+
+  if (q.includes("más") || q.includes("mayor") || q.includes("mas gast")) {
+    return mockTopCategoryDetail(conversationId);
+  }
+  if (q.includes("todas") || q.includes("transacciones") || q.includes("movimientos")) {
+    return mockAllTransactions(conversationId);
+  }
   return mockOverview(conversationId, "bar_chart");
 }
 
