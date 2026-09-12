@@ -1,12 +1,21 @@
-.a2ui-progress progress { width: 100%; height: 10px; accent-color: var(--color-primary); }
-.a2ui-category { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; border: 1px solid var(--color-border-soft); border-radius: var(--radius-xl); background: var(--color-surface); color: var(--color-ink); font-size: 13px; }
-.a2ui-category-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
-.a2ui-action { font: inherit; font-size: 13px; font-weight: 700; padding: 9px 16px; border: 1.5px solid var(--color-primary); border-radius: var(--radius-m); background: var(--color-surface); color: var(--color-primary); cursor: pointer; }
-.a2ui-action--primary { background: var(--color-primary); color: white; }
-.a2ui-action:hover:not(:disabled) { background: var(--color-primary-hover); color: white; }
-.a2ui-action:focus-visible { outline: 2px solid var(--color-ink); outline-offset: 3px; }
+.a2ui-progress { justify-content: center; gap: 15px; }
+.a2ui-progress strong, .a2ui-risk strong { font-size: 14px; font-weight: 600; }
+.a2ui-progress > span { font-size: 23px; font-weight: 500; letter-spacing: -.035em; font-variant-numeric: tabular-nums; }
+.a2ui-progress > span:last-child:not(:nth-child(2)) { font-size: 12px; letter-spacing: 0; color: var(--color-primary-active); }
+.a2ui-progress progress { appearance: none; width: 100%; height: 7px; border: 0; border-radius: 8px; overflow: hidden; accent-color: var(--color-primary); background: #f2e5e8; }
+.a2ui-progress progress::-webkit-progress-bar { background: #f2e5e8; border-radius: 8px; }
+.a2ui-progress progress::-webkit-progress-value { background: var(--color-primary); border-radius: 8px; }
+.a2ui-progress progress::-moz-progress-bar { background: var(--color-primary); border-radius: 8px; }
+.a2ui-category { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--color-border-soft); border-radius: 5px; background: #fff; color: var(--color-ink-muted); font-size: 11px; }
+.a2ui-category-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.a2ui-action { font: inherit; font-size: 12px; font-weight: 600; padding: 12px 22px; border: 1px solid var(--color-primary); border-radius: 5px; background: #fff; color: var(--color-primary); cursor: pointer; transition: background .15s, color .15s; }
+.a2ui-action--primary { background: var(--color-primary); color: #fff; }
+.a2ui-action:hover:not(:disabled) { background: var(--color-primary-hover); color: #fff; }
 .a2ui-action:disabled { opacity: .5; cursor: default; }
-.a2ui-risk { border-left: 4px solid var(--color-positive); }
+.a2ui-risk { gap: 10px; border-left: 3px solid #6cc04a; }
 .a2ui-risk--medium { border-left-color: var(--color-warning); }
 .a2ui-risk--high { border-left-color: var(--color-primary); }
-.a2ui-risk p { margin: 0; overflow-wrap: anywhere; }
+.a2ui-risk > span { color: #426537; font-size: 10px; font-weight: 600; border-radius: 4px; padding: 4px 8px; background: #f1f7ed; align-self: flex-start; }
+.a2ui-risk--medium > span { color: #785b22; background: #fff6e4; }
+.a2ui-risk--high > span { color: var(--color-primary-active); background: #fff0f3; }
+.a2ui-risk p { margin: 0; overflow-wrap: anywhere; font-size: 12px; line-height: 1.7; color: var(--color-ink-muted); }

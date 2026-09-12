@@ -15,6 +15,7 @@ export type ActionButtonProps = {
   params?: Record<string, unknown>;
 };
 export type RiskIndicatorProps = { level: RiskLevel; label: string; description?: string };
+export type TextBlockProps = { title: string; subtitle?: string };
 export type ComponentPropsMap = {
   PieChart: ChartProps;
   BarChart: ChartProps;
@@ -22,4 +23,5 @@ export type ComponentPropsMap = {
   CategoryBadge: CategoryBadgeProps;
   ActionButton: ActionButtonProps;
   RiskIndicator: RiskIndicatorProps;
+  TextBlock: TextBlockProps;
 };

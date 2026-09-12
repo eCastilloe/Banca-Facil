@@ -1,25 +1,25 @@
-import type { ComponentType } from "react";
-import type { RendererProps } from "./types";
-import { PieChart } from "./PieChart";
-import { BarChart } from "./BarChart";
-import { TransactionList } from "./TransactionList";
-import { UnknownComponent } from "./UnknownComponent";
+import type { RendererProps } from './types';
+import { TransactionList } from './TransactionList';
+import { A2UIComponentRenderer } from './a2ui';
+import { validTransactionProps } from '../lib/validateTransactions';
 
 /**
- * Catálogo cerrado de componentes que el agente puede invocar (ver
- * docs/a2ui-schema.md). El LLM elige libremente cuál usar entre los que
- * están aquí — agregar un componente nuevo es solo:
- *   1. construir el componente,
- *   2. registrarlo en este objeto,
- *   3. avisarle al backend que ya existe (para que el system prompt lo liste).
+ * Punto de entrada único para pintar cualquier componente que mande el
+ * agente. `transaction_list` se valida y pinta aquí mismo (es el único
+ * componente que no vive en el catálogo a2ui/); todo lo demás
+ * (pie_chart, bar_chart, text_block, progress, category_badge,
+ * action_button, risk_indicator) lo resuelve A2UIComponentRenderer contra
+ * el catálogo validado en components/a2ui/registry.ts.
  */
-const REGISTRY: Record<string, ComponentType<RendererProps>> = {
-  pie_chart: PieChart,
-  bar_chart: BarChart,
-  transaction_list: TransactionList,
-};
-
-export function ComponentRenderer({ component, onAction }: RendererProps) {
-  const Component = REGISTRY[component.type] ?? UnknownComponent;
-  return <Component component={component} onAction={onAction} />;
+export function ComponentRenderer(context: RendererProps) {
+  if (context.component.type === 'transaction_list') {
+    return validTransactionProps(context.component.props) ? (
+      <TransactionList {...context} />
+    ) : (
+      <div className="unknown-card" role="alert">
+        Datos no válidos para la lista de transacciones.
+      </div>
+    );
+  }
+  return <A2UIComponentRenderer {...context} />;
 }
