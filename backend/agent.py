@@ -1,36 +1,35 @@
-"""Agente del flujo de control de gasto por categoría.
+"""Agente: interpreta la intención y arma la pantalla que le corresponde.
 
-Orquesta el flujo. Entrega en el esquema A2UI real ya construido 
-por frontend
+Un solo endpoint (`POST /chat`) atiende tres tipos de evento, siguiendo el
+contrato que implementó frontend (`frontend/A2UI-INTEGRATION.md`):
+`"overview"` (al abrir la app), `"message"` (pregunta en lenguaje natural) y
+`"action"` (el usuario pulsó algo de la UI generada).
 
-1. Gemini resuelve el periodo que pidió el usuario en lenguaje natural, SIN
-   aplicarle el tope de 3 meses él mismo. Python aplica el tope de forma
-   determinística después (no confiamos aritmética de fechas a la LLM).
-2. Python llama a la tool MCP `obtener_gasto_por_categoria` con el rango ya
-   acotado. El agente nunca clasifica ni agrega transacciones, esa lógica
-   vive enteramente en el servidor MCP (contrato en español, interno).
-3. Gemini decide el tipo de gráfica (pie_chart / bar_chart) y un mensaje
-   breve, usando solo los totales por categoría (no la lista completa de
-   transacciones, para no gastar tokens de más).
-4. Python traduce la respuesta cruda de la tool (español, interno) al
-   envelope A2UI que el frontend ya espera (inglés, con `transactions`
-   anidadas por categoría) y lo regresa.
+Flujo de una pregunta:
+
+0. El router clasifica la intención Y extrae el periodo en UNA sola llamada
+   estructurada. Va junto a propósito: separarlo subiría el costo de 2 a 3
+   llamadas por consulta, y la cuota de Gemini es limitada.
+1. Python aplica el tope de 3 meses de forma determinística -- no se le
+   confía la aritmética de fechas al modelo.
+2. El handler de esa intención llama su tool MCP. El agente nunca clasifica
+   ni agrega transacciones: esa lógica vive entera en el servidor MCP
+   (contrato en español, interno).
+3. Gemini decide la presentación (pie_chart / bar_chart y un texto breve)
+   usando solo los totales por categoría, no la lista de transacciones.
+4. Python traduce el resultado al envelope A2UI en inglés que el frontend
+   espera, con las transacciones anidadas por categoría.
+
+**El ciclo se cierra en `event:"action"`** (regla 3 del reto): el agente
+ejecuta la acción vía MCP y responde con una PANTALLA NUEVA, no con un
+`{ok:true}`. Hoy la acción soportada es `crear_limite_gasto`, que el propio
+agente ofrece con un `action_button` cuando una categoría domina el gasto.
 
 Decisión de equipo (2026-09-12): el drill-down de categoría es 100% local
 en el frontend -- por eso cada categoría ya trae su `transactions` completa
-desde esta respuesta, y el envelope NO incluye ninguna acción de tipo
-"category_click". El endpoint de acciones (`POST /action`,
-`crear_limite_gasto`) existe y funciona, pero todavía no está conectado al
-envelope del chat -- eso queda para una siguiente iteración ("restringir a
-solo consulta y categorización por ahora", ver CLAUDE.md sección 8).
-
-Decisión de equipo (2026-09-12, reconciliación #2): `/chat` adopta el
-contrato de un solo endpoint + campo `event` que ya construyó e implementó
-frontend (`frontend/A2UI-INTEGRATION.md`) -- `"overview"` (sin mensaje, al
-abrir la app), `"message"` (pregunta en lenguaje natural), o `"action"`
-(no soportado aún, ver párrafo anterior). No hay pérdida de capacidad real
-frente al diseño de dos endpoints de CLAUDE.md sección 5 -- es la misma
-información, solo que en el body en vez de en la ruta.
+desde esta respuesta, y el envelope NO incluye acciones `category_click`.
+Es una excepción deliberada al ciclo, por robustez en el momento más
+visible de la demo; el ciclo sí se cierra en el flujo de acción.
 
 Nota de diseño: esto usa function calling manual (Python llama la tool MCP
 directamente) en vez del soporte "automático" experimental de Gemini para
@@ -59,6 +58,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -67,7 +67,7 @@ from pydantic import BaseModel
 load_dotenv()
 
 BACKEND_DIR = Path(__file__).parent
-MODEL = "gemini-2.5-flash"  # ajustar si el equipo decide otro modelo
+MODEL = "gemini-3.6-flash"  # ajustar si el equipo decide otro modelo
 
 TOPE_MESES = 3
 
@@ -98,7 +98,59 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 
-gemini_client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+# --- Clientes de Gemini con rotación de keys -------------------------------
+# La capa gratis da 20 solicitudes/día por key, y cada consulta del usuario
+# cuesta 2 llamadas. Rotamos entre varias keys al recibir un 429 para no
+# quedarnos sin cuota a media demo (ver CLAUDE.md, sección 6).
+
+
+def _keys_configuradas() -> list[str]:
+    varias = os.environ.get("GEMINI_API_KEYS", "").strip()
+    if varias:
+        return [k.strip() for k in varias.split(",") if k.strip()]
+    unica = os.environ.get("GEMINI_API_KEY", "").strip()
+    return [unica] if unica else []
+
+
+_KEYS = _keys_configuradas()
+if not _KEYS:
+    raise RuntimeError("Falta GEMINI_API_KEYS (o GEMINI_API_KEY) en el entorno")
+
+_clientes: dict[int, genai.Client] = {}
+_key_actual = 0
+
+
+def _cliente() -> genai.Client:
+    if _key_actual not in _clientes:
+        _clientes[_key_actual] = genai.Client(api_key=_KEYS[_key_actual])
+    return _clientes[_key_actual]
+
+
+async def _generar_json(prompt: str, schema: types.Schema) -> Any:
+    """Una llamada a Gemini con salida JSON estructurada, rotando de key al 429.
+
+    Todas las llamadas al modelo pasan por aquí: así la rotación aplica a
+    todo el agente sin repetir el manejo de cuota en cada sitio.
+    """
+    global _key_actual
+    for _ in range(len(_KEYS)):
+        try:
+            response = await _cliente().aio.models.generate_content(
+                model=MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=schema,
+                ),
+            )
+            return json.loads(response.text)
+        except genai_errors.ClientError as exc:
+            if exc.code != 429:
+                raise
+            _key_actual = (_key_actual + 1) % len(_KEYS)
+    raise RuntimeError(
+        f"Se agotó la cuota diaria de las {len(_KEYS)} API keys configuradas."
+    )
 
 
 async def _llamar_tool_mcp(nombre: str, argumentos: dict[str, Any]) -> Any:
@@ -130,45 +182,54 @@ class ChatRequest(BaseModel):
     params: dict[str, Any] | None = None
 
 
-class ActionRequest(BaseModel):
-    accion: str
-    parametros: dict[str, Any]
+# --- Paso 0: router de intención -------------------------------------------
+# Intención Y parámetros en UNA sola llamada, a propósito: separarlo subiría
+# el costo por consulta de 2 a 3 llamadas, y la cuota es limitada.
 
+INTENCIONES = [
+    "gasto_por_categoria",
+    "diagnostico_financiero",
+    "proximos_pagos",
+    "fuera_de_alcance",
+]
 
-# --- Paso 1: resolver el periodo (sin tope -- el tope lo aplica Python) -----
-
-PERIODO_SCHEMA = types.Schema(
+ROUTER_SCHEMA = types.Schema(
     type=types.Type.OBJECT,
     properties={
-        "fecha_inicio": types.Schema(type=types.Type.STRING, description="YYYY-MM-DD"),
-        "fecha_fin": types.Schema(type=types.Type.STRING, description="YYYY-MM-DD"),
+        "intencion": types.Schema(type=types.Type.STRING, enum=INTENCIONES),
+        "fecha_inicio": types.Schema(type=types.Type.STRING, nullable=True, description="YYYY-MM-DD"),
+        "fecha_fin": types.Schema(type=types.Type.STRING, nullable=True, description="YYYY-MM-DD"),
     },
-    required=["fecha_inicio", "fecha_fin"],
+    required=["intencion"],
 )
 
 
-async def _resolver_periodo_solicitado(mensaje_usuario: str) -> tuple[date, date]:
+async def _clasificar_intencion(mensaje_usuario: str) -> dict:
     hoy = date.today()
     prompt = f"""Hoy es {hoy.isoformat()}.
 
-El usuario preguntó: "{mensaje_usuario}"
+Eres el router de un asistente financiero. El usuario escribió:
+"{mensaje_usuario}"
 
-Interpreta a qué rango de fechas se refiere (ej. "el mes pasado",
-"últimos 2 meses") y responde con fecha_inicio y fecha_fin en formato
-YYYY-MM-DD. Si el usuario no especifica ninguna fecha, usa el mes actual
-completo. No te preocupes por ningún límite máximo de rango -- eso se
-aplica después."""
+Clasifica su intención en UNA de estas:
 
-    response = await gemini_client.aio.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=PERIODO_SCHEMA,
-        ),
-    )
-    datos = json.loads(response.text)
-    return date.fromisoformat(datos["fecha_inicio"]), date.fromisoformat(datos["fecha_fin"])
+- "gasto_por_categoria": quiere ver en qué se le fue el dinero, cuánto
+  gastó, o el desglose por categoría de un periodo.
+- "diagnostico_financiero": quiere saber cómo va, si va bien o mal, si se
+  está pasando, comparar contra antes, o consejos sobre sus hábitos.
+- "proximos_pagos": pregunta por cargos o pagos que vienen, suscripciones,
+  domiciliaciones o qué se le va a cobrar.
+- "fuera_de_alcance": cualquier otra cosa (temas no financieros, o
+  financieros que este asistente no cubre como inversiones, créditos o
+  seguros).
+
+Si la intención necesita un periodo (las dos primeras), interpreta también
+el rango de fechas al que se refiere y devuélvelo en fecha_inicio y
+fecha_fin (YYYY-MM-DD). Si no menciona fechas, usa el mes actual completo.
+Si la intención no necesita periodo, déjalos en null. No te preocupes por
+ningún límite máximo de rango: eso se aplica después."""
+
+    return await _generar_json(prompt, ROUTER_SCHEMA)
 
 
 def _aplicar_tope(solicitado_inicio: date, solicitado_fin: date) -> tuple[date, date, bool]:
@@ -202,15 +263,7 @@ Decide:
 - "mensaje": una frase breve (en español) describiendo el hallazgo
   principal para mostrarle al usuario."""
 
-    response = await gemini_client.aio.models.generate_content(
-        model=MODEL,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_schema=DECISION_UI_SCHEMA,
-        ),
-    )
-    return json.loads(response.text)
+    return await _generar_json(prompt, DECISION_UI_SCHEMA)
 
 
 # --- Orquestación ------------------------------------------------------------
@@ -248,15 +301,81 @@ def _traducir_categorias(gasto_por_categoria: dict[str, dict], total_spent: floa
     return categorias
 
 
-async def _llamar_agente(mensaje_usuario: str | None, conversation_id: str) -> dict:
-    if mensaje_usuario:
-        solicitado_inicio, solicitado_fin = await _resolver_periodo_solicitado(mensaje_usuario)
-    else:
-        # event="overview" (o mensaje vacío): default directo a mes actual,
-        # sin gastar una llamada a Gemini en el caso más común (abrir la app).
-        hoy = date.today()
-        solicitado_inicio, solicitado_fin = hoy.replace(day=1), hoy
+def _envelope(conversation_id: str, intent: str, components: list[dict], sugerencias: list[str]) -> dict:
+    return {
+        "version": "1.0",
+        "intent": intent,
+        "conversation_id": conversation_id,
+        "components": components,
+        "suggested_prompts": sugerencias,
+    }
 
+
+def _texto(id_componente: str, titulo: str, subtitulo: str | None = None) -> dict:
+    props: dict[str, Any] = {"title": titulo}
+    if subtitulo:
+        props["subtitle"] = subtitulo
+    return {"id": id_componente, "type": "text_block", "props": props}
+
+
+# Sugerencias fijas por intención en vez de generadas por el LLM: cuestan
+# cero llamadas (la cuota es limitada) y siguen siendo contextuales, porque
+# cambian según la pantalla que se acaba de mostrar.
+SUGERENCIAS = {
+    "gasto_por_categoria": ["¿Cómo voy este mes?", "¿Qué pagos tengo próximos?"],
+    "diagnostico_financiero": ["¿En qué gasté más este mes?", "¿Qué pagos tengo próximos?"],
+    "proximos_pagos": ["¿En qué gasté más este mes?", "¿Cómo voy este mes?"],
+    "fuera_de_alcance": [
+        "¿En qué gasté más este mes?",
+        "¿Cómo voy este mes?",
+        "¿Qué pagos tengo próximos?",
+    ],
+    "limite_creado": ["¿Cómo voy este mes?", "¿En qué gasté más?"],
+}
+
+# Una categoría "domina" si se lleva al menos esto del total. Regla
+# determinista en Python, no decisión del LLM: es lógica de negocio y así
+# es testeable y no cuesta tokens.
+UMBRAL_DOMINANCIA = 30.0
+RECORTE_SUGERIDO = 0.20  # el límite que sugerimos es 20% menos del gasto actual
+
+
+def _sugerencia_de_limite(categorias: list[dict]) -> dict | None:
+    """Arma el action_button de 'crear límite' si una categoría domina el gasto."""
+    if not categorias:
+        return None
+    mayor = max(categorias, key=lambda c: c["total"])
+    if mayor["percent"] < UMBRAL_DOMINANCIA:
+        return None
+
+    # Redondeado a 50 para que el monto se lea como algo que una persona
+    # elegiría, no como un decimal salido de una multiplicación.
+    sugerido = round(mayor["total"] * (1 - RECORTE_SUGERIDO) / 50) * 50
+    if sugerido <= 0:
+        return None
+
+    categoria_interna = next(
+        (nombre for nombre, info in CATEGORIA_INFO.items() if info["id"] == mayor["id"]),
+        mayor["label"],
+    )
+    return {
+        "id": "sugerencia_limite",
+        "type": "action_button",
+        "props": {
+            "label": f"Crear límite de ${sugerido:,.0f} en {mayor['label']}",
+            "action": "crear_limite_gasto",
+            "params": {"categoria": categoria_interna, "monto_limite": float(sugerido)},
+            "variant": "primary",
+        },
+    }
+
+
+# --- Handlers por intención --------------------------------------------------
+
+
+async def _handler_gasto_por_categoria(
+    conversation_id: str, solicitado_inicio: date, solicitado_fin: date
+) -> dict:
     fecha_inicio, fecha_fin, fue_recortado = _aplicar_tope(solicitado_inicio, solicitado_fin)
 
     gasto_por_categoria = await _llamar_tool_mcp(
@@ -264,72 +383,184 @@ async def _llamar_agente(mensaje_usuario: str | None, conversation_id: str) -> d
         {"fecha_inicio": fecha_inicio.isoformat(), "fecha_fin": fecha_fin.isoformat()},
     )
 
-    period = {
-        "start": fecha_inicio.isoformat(),
-        "end": fecha_fin.isoformat(),
-        "requested_start": solicitado_inicio.isoformat(),
-        "requested_end": solicitado_fin.isoformat(),
-        "was_clamped": fue_recortado,
-    }
-
     if not gasto_por_categoria:
-        return {
-            "version": "1.0",
-            "intent": "entender_gastos",
-            "conversation_id": conversation_id,
-            "message": "No encontré gastos registrados en ese periodo.",
-            "components": [],
-        }
+        # components=[] -- el frontend ya tiene su propio estado vacío
+        # ("No hay resultados para esta consulta" + botón volver al resumen).
+        return _envelope(conversation_id, "gasto_por_categoria", [], SUGERENCIAS["gasto_por_categoria"])
 
     total_spent = sum(datos["monto_total"] for datos in gasto_por_categoria.values())
     categorias = _traducir_categorias(gasto_por_categoria, total_spent)
-
     decision = await _decidir_ui(categorias)
 
-    return {
-        "version": "1.0",
-        "intent": "entender_gastos",
-        "conversation_id": conversation_id,
-        # Campo adicional, no forma parte todavía del tipo A2UIEnvelope del
-        # frontend -- es seguro mandarlo desde ya (no rompe nada), y queda
-        # disponible para cuando el frontend decida mostrarlo.
-        "message": decision["mensaje"],
-        "components": [
-            {
-                "id": "spending_overview",
-                "type": decision["variante"],
-                "props": {
-                    "period": period,
-                    "total_spent": total_spent,
-                    "categories": categorias,
+    componentes = [
+        _texto("insight", decision["mensaje"]),
+        {
+            "id": "spending_overview",
+            "type": decision["variante"],
+            "props": {
+                "period": {
+                    "start": fecha_inicio.isoformat(),
+                    "end": fecha_fin.isoformat(),
+                    "requested_start": solicitado_inicio.isoformat(),
+                    "requested_end": solicitado_fin.isoformat(),
+                    "was_clamped": fue_recortado,
                 },
-            }
+                "total_spent": total_spent,
+                "categories": categorias,
+            },
+        },
+    ]
+
+    boton = _sugerencia_de_limite(categorias)
+    if boton:
+        componentes.append(boton)
+
+    return _envelope(
+        conversation_id, "gasto_por_categoria", componentes, SUGERENCIAS["gasto_por_categoria"]
+    )
+
+
+async def _handler_pendiente(conversation_id: str, intent: str, que_falta: str) -> dict:
+    """Intención ya ruteable pero cuya tool MCP todavía no existe.
+
+    Se responde honestamente en vez de fingir datos. Cuando la tool del
+    Bloque 1 aterrice, este handler se reemplaza por el real (ver CLAUDE.md,
+    sección 11.2).
+    """
+    return _envelope(
+        conversation_id,
+        intent,
+        [_texto("pendiente", que_falta, "Mientras tanto, puedo ayudarte con lo de abajo.")],
+        SUGERENCIAS.get(intent, SUGERENCIAS["fuera_de_alcance"]),
+    )
+
+
+def _handler_fuera_de_alcance(conversation_id: str) -> dict:
+    return _envelope(
+        conversation_id,
+        "fuera_de_alcance",
+        [
+            _texto(
+                "fuera_de_alcance",
+                "Eso no lo puedo responder todavía.",
+                "Puedo ayudarte con tus gastos, tu diagnóstico financiero y tus próximos pagos.",
+            )
         ],
-    }
+        SUGERENCIAS["fuera_de_alcance"],
+    )
 
 
-# --- Endpoints HTTP (consumidos únicamente por el frontend) ----------------
+# --- Orquestación de consultas ----------------------------------------------
+
+
+def _periodo_del_router(router: dict) -> tuple[date, date]:
+    """Fechas que resolvió el router, con el mes actual como red de seguridad."""
+    hoy = date.today()
+    try:
+        return (
+            date.fromisoformat(router["fecha_inicio"]),
+            date.fromisoformat(router["fecha_fin"]),
+        )
+    except (KeyError, TypeError, ValueError):
+        return hoy.replace(day=1), hoy
+
+
+async def _responder_consulta(mensaje_usuario: str | None, conversation_id: str) -> dict:
+    hoy = date.today()
+
+    if not mensaje_usuario:
+        # event="overview": ya sabemos la intención, así que no gastamos la
+        # llamada del router en el caso más común (abrir la app).
+        return await _handler_gasto_por_categoria(conversation_id, hoy.replace(day=1), hoy)
+
+    router = await _clasificar_intencion(mensaje_usuario)
+    intencion = router.get("intencion", "fuera_de_alcance")
+
+    if intencion == "gasto_por_categoria":
+        inicio, fin = _periodo_del_router(router)
+        return await _handler_gasto_por_categoria(conversation_id, inicio, fin)
+
+    if intencion == "diagnostico_financiero":
+        return await _handler_pendiente(
+            conversation_id,
+            "diagnostico_financiero",
+            "El diagnóstico de tus hábitos todavía no está listo.",
+        )
+
+    if intencion == "proximos_pagos":
+        return await _handler_pendiente(
+            conversation_id,
+            "proximos_pagos",
+            "La proyección de tus próximos pagos todavía no está lista.",
+        )
+
+    return _handler_fuera_de_alcance(conversation_id)
+
+
+# --- Orquestación de acciones (aquí se cierra el ciclo) ---------------------
+
+
+async def _responder_accion(action_id: str, params: dict[str, Any], conversation_id: str) -> dict:
+    """Ejecuta la acción y responde con una PANTALLA NUEVA, no con un {ok:true}.
+
+    Eso es lo que cumple la regla 3 del reto: la interacción con la UI
+    generada vuelve al agente y produce una interfaz nueva.
+    """
+    if action_id != "crear_limite_gasto":
+        raise HTTPException(status_code=400, detail=f"Acción no soportada: {action_id}")
+
+    categoria = params.get("categoria")
+    monto_limite = params.get("monto_limite")
+    if not categoria or not monto_limite:
+        raise HTTPException(status_code=400, detail="Faltan 'categoria' o 'monto_limite'")
+
+    await _llamar_tool_mcp(
+        "crear_limite_gasto", {"categoria": categoria, "monto_limite": float(monto_limite)}
+    )
+
+    # Cuánto lleva gastado en esa categoría este mes, para que la
+    # confirmación muestre dónde está parado contra el límite recién creado.
+    hoy = date.today()
+    gasto = await _llamar_tool_mcp(
+        "obtener_gasto_por_categoria",
+        {"fecha_inicio": hoy.replace(day=1).isoformat(), "fecha_fin": hoy.isoformat()},
+    )
+    gastado = gasto.get(categoria, {}).get("monto_total", 0.0)
+    etiqueta = CATEGORIA_INFO.get(categoria, {}).get("label", categoria)
+
+    return _envelope(
+        conversation_id,
+        "limite_creado",
+        [
+            _texto(
+                "confirmacion",
+                f"Listo, te aviso si {etiqueta} pasa de ${float(monto_limite):,.0f}.",
+            ),
+            {
+                "id": "limite_progreso",
+                "type": "progress",
+                "props": {
+                    "label": f"{etiqueta} este mes",
+                    "value": gastado,
+                    "max": float(monto_limite),
+                },
+            },
+        ],
+        SUGERENCIAS["limite_creado"],
+    )
+
+
+# --- Endpoint HTTP (único punto de contacto del frontend) ------------------
 
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
     conversation_id = req.conversation_id or str(uuid.uuid4())
-    if req.event == "action":
-        raise HTTPException(
-            status_code=400,
-            detail="Acciones no soportadas en /chat todavía -- alcance restringido a consulta y categorización.",
-        )
     try:
-        return await _llamar_agente(req.message, conversation_id)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-
-
-@app.post("/action")
-async def action(req: ActionRequest):
-    if req.accion != "crear_limite_gasto":
-        raise HTTPException(status_code=400, detail=f"Acción no soportada: {req.accion}")
-    try:
-        return await _llamar_tool_mcp("crear_limite_gasto", req.parametros)
+        if req.event == "action":
+            return await _responder_accion(req.action_id or "", req.params or {}, conversation_id)
+        return await _responder_consulta(req.message, conversation_id)
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
