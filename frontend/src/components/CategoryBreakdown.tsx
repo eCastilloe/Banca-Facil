@@ -17,23 +17,19 @@ type Mode = "donut" | "bars";
 
 /**
  * Motor compartido de pie_chart y bar_chart: mismos datos, dos formas de
- * verlos. El agente decide el `type` (qué modo arranca activo), pero el
- * usuario puede cambiar de vista libremente — es la misma información,
- * nomás otra forma de leerla.
+ * pintarlas. Cuál de las dos se usa lo decide el agente (el `type` que
+ * manda en el envelope) — no hay switch para que el usuario lo cambie a
+ * mano, eso pisaría la decisión del LLM. El modo queda fijo por
+ * instancia; PieChart/BarChart son los dos "sabores" registrados.
  *
  * También recorta a las 4 categorías con más gasto por default (menos
  * contaminación visual) con un "+N más" que expande el resto.
  */
-export function CategoryBreakdown({
-  component,
-  onAction,
-  initialMode,
-}: RendererProps & { initialMode: Mode }) {
+export function CategoryBreakdown({ component, onAction, mode }: RendererProps & { mode: Mode }) {
   const props = component.props as unknown as CategoryBreakdownProps;
   const { categories, period, total_spent } = props;
   const animatedTotal = useCountUp(total_spent);
 
-  const [mode, setMode] = useState<Mode>(initialMode);
   const [expanded, setExpanded] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [grown, setGrown] = useState(false);
@@ -88,27 +84,7 @@ export function CategoryBreakdown({
     <div className="breakdown-card">
       <div className="breakdown-header">
         <span className="breakdown-period">{period.label ?? `${period.start} → ${period.end}`}</span>
-        <div className="breakdown-header-right">
-          {period.was_clamped && <span className="breakdown-clamped">Tope de 3 meses aplicado</span>}
-          <div className="mode-toggle" role="tablist" aria-label="Tipo de gráfica">
-            <button
-              type="button"
-              className={mode === "donut" ? "mode-btn mode-btn--active" : "mode-btn"}
-              aria-pressed={mode === "donut"}
-              onClick={() => setMode("donut")}
-            >
-              Dona
-            </button>
-            <button
-              type="button"
-              className={mode === "bars" ? "mode-btn mode-btn--active" : "mode-btn"}
-              aria-pressed={mode === "bars"}
-              onClick={() => setMode("bars")}
-            >
-              Barras
-            </button>
-          </div>
-        </div>
+        {period.was_clamped && <span className="breakdown-clamped">Tope de 3 meses aplicado</span>}
       </div>
 
       {mode === "donut" ? (
