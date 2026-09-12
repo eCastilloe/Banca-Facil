@@ -365,28 +365,57 @@ h1, h2, h3 { margin: 0; }
 
 .breakdown-total { font-size: 14px; font-weight: 700; color: var(--color-ink); }
 
-/* pie chart */
+.breakdown-header-right { display: flex; align-items: center; gap: 10px; }
 
-.breakdown-body--pie {
+/* toggle dona/barras — el usuario puede cambiar la vista sin volver a
+   preguntarle al agente, es la misma data. */
+
+.mode-toggle {
+  display: flex;
+  padding: 2px;
+  background: var(--color-bg);
+  border-radius: 999px;
+  flex: none;
+}
+
+.mode-btn {
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-ink-muted);
+  cursor: pointer;
+}
+
+.mode-btn--active { background: var(--color-surface); color: var(--color-primary); box-shadow: 0 1px 2px rgba(50, 62, 72, 0.12); }
+
+/* dona: SVG en vez de conic-gradient, para poder resaltar un segmento al
+   pasar el mouse por su fila correspondiente (y viceversa). */
+
+.breakdown-body--donut {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 22px;
   flex-wrap: wrap;
 }
 
-.pie {
+.donut-wrap {
   flex: none;
-  width: 132px;
-  height: 132px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  width: 168px;
+  height: 168px;
 }
 
-.pie-hole {
-  width: 82px;
-  height: 82px;
+.donut-svg { width: 100%; height: 100%; }
+
+.donut-segment { transition: stroke-width 0.15s ease, stroke-dasharray 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
+
+.donut-hole {
+  position: absolute;
+  inset: 26px;
   border-radius: 50%;
   background: var(--color-surface);
   display: flex;
@@ -394,12 +423,15 @@ h1, h2, h3 { margin: 0; }
   align-items: center;
   justify-content: center;
   text-align: center;
+  pointer-events: none;
 }
 
-.pie-total { font-size: 13px; font-weight: 700; color: var(--color-ink); }
-.pie-total-label { font-size: 10.5px; color: var(--color-ink-subtle); }
+.donut-total { font-size: 15px; font-weight: 800; color: var(--color-ink); }
+.donut-total-label { font-size: 10.5px; color: var(--color-ink-subtle); }
 
-.breakdown-legend {
+/* filas tipo "chip": ícono en pastilla de color suave + texto */
+
+.chip-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -407,28 +439,53 @@ h1, h2, h3 { margin: 0; }
   min-width: 200px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
-.legend-row {
+.chip-row {
   display: grid;
-  grid-template-columns: 8px 1fr auto auto;
+  grid-template-columns: 28px 1fr auto auto;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   font-size: 12.5px;
-  padding: 6px 8px;
-  border-radius: var(--radius-s);
+  padding: 5px 8px;
+  border-radius: var(--radius-m);
   cursor: pointer;
   transition: background 0.12s ease;
 }
 
-.legend-row:hover { background: rgba(235, 0, 41, 0.05); }
-.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-.legend-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-ink); font-weight: 500; }
-.legend-amount { font-weight: 700; white-space: nowrap; color: var(--color-ink); }
-.legend-percent { color: var(--color-ink-subtle); white-space: nowrap; }
+.chip-row:hover, .chip-row--hover { background: var(--color-bg); }
 
-/* bar chart */
+.chip-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.chip-icon-svg { width: 15px; height: 15px; }
+.chip-icon-dots { font-size: 10.5px; font-weight: 800; }
+
+.chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-ink); font-weight: 500; }
+.chip-amount { font-weight: 700; white-space: nowrap; color: var(--color-ink); }
+.chip-percent { color: var(--color-ink-subtle); white-space: nowrap; }
+
+.breakdown-collapse {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+
+/* barras */
 
 .bar-list {
   list-style: none;
@@ -436,21 +493,31 @@ h1, h2, h3 { margin: 0; }
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.bar-row { cursor: pointer; padding: 6px 8px; border-radius: var(--radius-s); transition: background 0.12s ease; }
-.bar-row:hover { background: rgba(235, 0, 41, 0.05); }
+.bar-row { cursor: pointer; padding: 6px 8px; border-radius: var(--radius-m); transition: background 0.12s ease; }
+.bar-row:hover { background: var(--color-bg); }
 
 .bar-row-top {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 10px;
   font-size: 13px;
-  margin-bottom: 6px;
+  margin-bottom: 7px;
 }
 
-.bar-label { font-weight: 600; color: var(--color-ink); }
+.bar-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.bar-label { font-weight: 600; color: var(--color-ink); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-amount { color: var(--color-ink-muted); white-space: nowrap; font-weight: 600; }
 
 .bar-track {
@@ -458,6 +525,7 @@ h1, h2, h3 { margin: 0; }
   border-radius: 4px;
   background: var(--color-bg);
   overflow: hidden;
+  margin-left: 36px;
 }
 
 .bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }

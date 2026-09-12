@@ -15,6 +15,20 @@ function greeting(): string {
   return `Buenas noches, ${DEMO_USER_NAME}`;
 }
 
+// Varias opciones de tono para el subtítulo del hero — sale una al azar
+// cada vez que se abre la app en vez de repetir siempre la misma frase.
+const HERO_SUBTITLES = [
+  "Pregúntame en qué se te fue el dinero este mes.",
+  "¿En qué se te fue el dinero? Vamos a verlo.",
+  "Cuéntame qué te preocupa de tus gastos.",
+  "Cualquier duda sobre tus gastos, aquí la resolvemos.",
+  "Cuéntame qué quieres saber de tus gastos.",
+];
+
+function randomHeroSubtitle(): string {
+  return HERO_SUBTITLES[Math.floor(Math.random() * HERO_SUBTITLES.length)];
+}
+
 function SkeletonCard() {
   return (
     <div className="skeleton-card" aria-hidden="true">
@@ -39,6 +53,7 @@ export default function App() {
   // REEMPLAZA (clic en categoría, "volver al resumen", nueva pregunta),
   // nunca se apila. `viewKey` solo sirve para retriggerear la animación
   // de entrada cuando cambia el contenido.
+  const [heroSubtitle] = useState(randomHeroSubtitle);
   const [view, setView] = useState<A2UIEnvelope | null>(null);
   const [viewKey, setViewKey] = useState(0);
   const [lastQuestion, setLastQuestion] = useState<string | null>(null);
@@ -107,7 +122,7 @@ export default function App() {
         <div className="hero-inner">
           <p className="hero-eyebrow">{greeting()}</p>
           <h1 className="hero-title">Entender mis gastos</h1>
-          <p className="hero-subtitle">Pregúntale a tu asistente en qué se te fue el dinero.</p>
+          <p className="hero-subtitle">{heroSubtitle}</p>
         </div>
       </div>
 
