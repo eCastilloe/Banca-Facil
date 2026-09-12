@@ -60,10 +60,15 @@ const TRANSACTIONS: Record<string, TransactionItem[]> = {
   otros: [{ id: "t15", date: "2026-07-30", description: "Cargo sin identificar", amount: -340.0 }],
 };
 
-/** El LLM decide libremente el `type` — en el mock lo simulamos eligiendo
- * bar_chart cuando hay muchas categorías con montos parecidos (como aquí),
- * igual que se acordó que decidiría el modelo real. */
-export function mockOverview(conversationId: string): A2UIEnvelope {
+/** El LLM decide libremente el `type` — en el mock lo simulamos con un
+ * default de `pie_chart` (lo que se ve al abrir la app, sin que el usuario
+ * tenga que preguntar nada), pero cuando la pregunta es explícita el mock
+ * elige `bar_chart` por ser más legible con 8 categorías — igual que se
+ * acordó que decidiría el modelo real caso por caso. */
+export function mockOverview(
+  conversationId: string,
+  preferredType: "pie_chart" | "bar_chart" = "pie_chart",
+): A2UIEnvelope {
   return {
     version: "1.0",
     intent: "entender_gastos",
@@ -71,7 +76,7 @@ export function mockOverview(conversationId: string): A2UIEnvelope {
     components: [
       {
         id: "spending_overview",
-        type: "bar_chart",
+        type: preferredType,
         props: {
           period: PERIOD,
           total_spent: TOTAL_SPENT,
