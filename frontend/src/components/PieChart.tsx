@@ -1,9 +1,12 @@
+import { useState } from "react";
 import type { RendererProps } from "./types";
+import { CategoryDetail } from './CategoryDetail';
 import type { CategoryBreakdownProps } from "../types/a2ui";
 import { colorForCategory } from "../lib/categoryColors";
 import { formatMXN } from "../lib/format";
 
-export function PieChart({ component, onAction }: RendererProps) {
+export function PieChart({ component }: RendererProps) {
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const props = component.props as unknown as CategoryBreakdownProps;
   const { categories, period, total_spent } = props;
 
@@ -15,10 +18,8 @@ export function PieChart({ component, onAction }: RendererProps) {
   });
   const gradient = categories.length ? `conic-gradient(${stops.join(", ")})` : "var(--border)";
 
-  const clickAction = component.actions?.find((a) => a.trigger === "category_click");
-  const handleClick = (categoryId: string) => {
-    if (clickAction) onAction(clickAction.id, { category_id: categoryId });
-  };
+  const selectedCategory = categories.find(category => category.id === selectedCategoryId);
+  if (selectedCategory) return <CategoryDetail category={selectedCategory} period={period} onBack={() => setSelectedCategoryId(null)} />;
 
   return (
     <div className="breakdown-card">
@@ -40,9 +41,15 @@ export function PieChart({ component, onAction }: RendererProps) {
             <li
               key={c.id}
               className="legend-row"
-              onClick={() => handleClick(c.id)}
-              role={clickAction ? "button" : undefined}
-              tabIndex={clickAction ? 0 : undefined}
+              onClick={() => setSelectedCategoryId(c.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setSelectedCategoryId(c.id);
+                }
+              }}
+              role="button"
+              tabIndex={0}
             >
               <span className="legend-dot" style={{ background: colorForCategory(c.id) }} />
               <span className="legend-label">{c.label}</span>

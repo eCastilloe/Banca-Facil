@@ -39,3 +39,16 @@ test('invalid props cannot reach charts or transaction rendering', () => {
   const props = mockCategoryDetail('test', 'despensa').components[0].props;
   assert.equal(validTransactionProps({ ...props, transactions: [{ id: 'bad', amount: '100' }] }), false);
 });
+
+test('both overview charts include inline transactions without remote category actions', () => {
+  for (const type of ['pie_chart', 'bar_chart']) {
+    const envelope = parseEnvelope(JSON.stringify(mockOverview('test', type)), 'test');
+    const overview = envelope.components.find(component => component.id === 'spending_overview');
+    assert.equal(overview.actions, undefined);
+    for (const category of overview.props.categories) {
+      assert.ok(Array.isArray(category.transactions));
+      assert.equal(validTransactionProps({ category, period: overview.props.period, total: category.total, transactions: category.transactions }), true);
+    }
+    assert.equal(overview.props.categories[0].transactions[0].description, 'Walmart');
+  }
+});

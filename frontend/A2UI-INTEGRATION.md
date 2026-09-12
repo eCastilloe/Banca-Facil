@@ -8,7 +8,8 @@ Desde `frontend`: `npm ci`, después `npm run dev`.
 
 - Al abrir: progreso, indicador de riesgo, categoría, gráfica circular y botón de detalle.
 - Escribe `barras` o `resumen` para cambiar de gráfica.
-- Escribe `despensa` o pulsa una categoría/el botón para ver transacciones; “Volver al resumen” recupera la vista inicial.
+- Pulsa una categoría de cualquiera de las gráficas para ver sus transacciones inline; “Volver” restaura esa misma gráfica. Ambas operaciones son locales y no llaman a la API.
+- Escribir `despensa` o pulsar el botón independiente de detalle conserva el flujo anterior; “Volver al resumen” recupera la vista inicial en ese flujo.
 - `demo vacío`: respuesta sin componentes.
 - `demo error`: fallo simulado.
 - `demo inválido`: respuesta que no cumple el contrato.
@@ -16,6 +17,8 @@ Desde `frontend`: `npm ci`, después `npm run dev`.
 Los datos son ficticios y las preguntas se resuelven con reglas sencillas, sin IA. Los totales de categoría son del periodo completo y las transacciones del mock son solo una muestra.
 
 ## Conectar backend
+
+Para `pie_chart` y `bar_chart`, cada elemento de `props.categories` debe incluir `transactions: TransactionItem[]` (`id`, `date`, `description`, `amount`). El backend ya no necesita enviar acciones `category_click` en `spending_overview`. El detalle usa el periodo y total de la categoría recibida, sin peticiones adicionales. Respuestas antiguas sin `transactions` muestran una lista vacía; transacciones mal formadas muestran un error local con opción de volver. El validador del catálogo sigue siendo compatible con respuestas antiguas.
 
 Copia `.env.example` a `.env.local`, asigna `VITE_A2UI_ENDPOINT=http://localhost:3000/chat` (o la URL real) y reinicia Vite. Vacío usa mock; configurado usa HTTP y muestra los errores sin sustituirlos por datos ficticios. No coloques claves privadas en variables VITE.
 

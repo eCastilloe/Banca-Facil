@@ -1,17 +1,18 @@
+import { useState } from "react";
 import type { RendererProps } from "./types";
+import { CategoryDetail } from './CategoryDetail';
 import type { CategoryBreakdownProps } from "../types/a2ui";
 import { colorForCategory } from "../lib/categoryColors";
 import { formatMXN } from "../lib/format";
 
-export function BarChart({ component, onAction }: RendererProps) {
+export function BarChart({ component }: RendererProps) {
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const props = component.props as unknown as CategoryBreakdownProps;
   const { categories, period, total_spent } = props;
   const max = Math.max(...categories.map((c) => c.total), 1);
 
-  const clickAction = component.actions?.find((a) => a.trigger === "category_click");
-  const handleClick = (categoryId: string) => {
-    if (clickAction) onAction(clickAction.id, { category_id: categoryId });
-  };
+  const selectedCategory = categories.find(category => category.id === selectedCategoryId);
+  if (selectedCategory) return <CategoryDetail category={selectedCategory} period={period} onBack={() => setSelectedCategoryId(null)} />;
 
   return (
     <div className="breakdown-card">
@@ -27,9 +28,15 @@ export function BarChart({ component, onAction }: RendererProps) {
           <li
             key={c.id}
             className="bar-row"
-            onClick={() => handleClick(c.id)}
-            role={clickAction ? "button" : undefined}
-            tabIndex={clickAction ? 0 : undefined}
+            onClick={() => setSelectedCategoryId(c.id)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                setSelectedCategoryId(c.id);
+              }
+            }}
+            role="button"
+            tabIndex={0}
           >
             <div className="bar-row-top">
               <span className="bar-label">{c.label}</span>

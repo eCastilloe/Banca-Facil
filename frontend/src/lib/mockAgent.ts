@@ -83,9 +83,8 @@ export function mockOverview(
         props: {
           period: PERIOD,
           total_spent: TOTAL_SPENT,
-          categories: CATEGORIES,
+          categories: CATEGORIES.map(category => ({ ...category, transactions: TRANSACTIONS[category.id] ?? [] })),
         },
-        actions: [{ id: "view_category_detail", trigger: "category_click", label: "Ver detalle" }],
       },
       { id: 'detail_button', type: 'action_button', props: { label: 'Ver gastos de despensa', action: 'view_category_detail', params: { category_id: 'despensa' } } },
     ],

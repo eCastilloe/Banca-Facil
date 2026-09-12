@@ -21,6 +21,7 @@ export type CategoryBreakdownItem = {
   label: string;
   total: number;
   percent: number;
+  transactions: TransactionItem[];
 };
 
 /** Props compartidas por pie_chart y bar_chart — el LLM elige el `type`,
