@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { A2UIEnvelope } from "./types/a2ui";
 import { ComponentRenderer } from "./components/registry";
+import { BankChrome } from "./components/BankChrome";
 import { loadDefaultOverview, newConversationId, sendAction, sendMessage } from "./lib/api";
 
 export default function App() {
@@ -70,14 +71,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <div className="app-topbar" />
-
-      <header className="app-header">
-        <div className="app-header-inner">
-          <span className="brand">BANORTE</span>
-          <h1>Entender mis gastos</h1>
-        </div>
-      </header>
+      <BankChrome />
 
       <main className="screen">
         <div className="screen-inner">

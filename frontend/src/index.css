@@ -57,30 +57,99 @@ h1, h2, h3 { margin: 0; }
   background: var(--color-bg);
 }
 
-.app-topbar { height: 4px; background: var(--color-primary); flex: none; }
+/* --- chrome "sitio de Banorte": barra de utilidad + header + pestañas de
+   producto, para que esto se sienta como una sección dentro de su sitio,
+   no como una app aparte. Todo excepto la última pestaña es decorativo. --- */
 
-.app-header {
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border-soft);
-}
+.bank-utility { background: var(--color-ink); flex: none; }
 
-.app-header-inner {
-  max-width: var(--content-width);
+.bank-utility-inner {
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 18px 24px 16px;
+  padding: 6px 24px;
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #c7ccd1;
 }
 
-.brand {
-  font-size: 12px;
+.bank-utility-right { display: flex; gap: 16px; }
+
+.bank-main { background: var(--color-surface); border-bottom: 1px solid var(--color-border-soft); flex: none; }
+
+.bank-main-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.bank-logo {
+  font-size: 20px;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.02em;
+  color: var(--color-primary);
+  flex: none;
+}
+
+.bank-segments { display: flex; gap: 22px; flex: 1; }
+
+.bank-segment {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-ink-muted);
+  padding-bottom: 3px;
+  border-bottom: 2px solid transparent;
+}
+
+.bank-segment--active { color: var(--color-ink); border-bottom-color: var(--color-primary); }
+
+.bank-actions { display: flex; align-items: center; gap: 14px; flex: none; }
+
+.bank-icon-btn {
+  display: inline-flex;
+  color: var(--color-ink-muted);
+}
+
+.bank-enter-btn {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 18px;
+  border-radius: var(--radius-s);
+  border: 1.5px solid var(--color-primary);
   color: var(--color-primary);
 }
 
-.app-header h1 { font-size: 19px; font-weight: 700; color: var(--color-ink); }
+.bank-tabs { background: var(--color-surface); border-bottom: 1px solid var(--color-border-soft); flex: none; }
+
+.bank-tabs-inner {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 0 24px;
+  display: flex;
+  gap: 26px;
+  overflow-x: auto;
+}
+
+.bank-tab {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--color-ink-subtle);
+  padding: 12px 2px;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.bank-tab--active { color: var(--color-primary); border-bottom-color: var(--color-primary); }
+
+/* en pantallas angostas solo dejamos el logo + las pestañas de producto
+   (lo único funcional); el resto es puramente decorativo y sobra ahí. */
+@media (max-width: 640px) {
+  .bank-utility, .bank-segments, .bank-actions { display: none; }
+}
 
 /* --- pantalla única: se reemplaza en cada respuesta, no se acumula --- */
 
