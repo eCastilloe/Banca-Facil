@@ -113,6 +113,9 @@ export function mockOverview(
     intent: "entender_gastos",
     conversation_id: conversationId,
     components: [
+      { id: 'budget_progress', type: 'progress', props: { label: 'Presupuesto del periodo', value: TOTAL_SPENT, max: 25000 } },
+      { id: 'budget_risk', type: 'risk_indicator', props: { level: 'medium', label: 'Acercándote al presupuesto', description: 'Has utilizado cerca del 74% del presupuesto de ejemplo.' } },
+      { id: 'category_badge', type: 'category_badge', props: { category: 'despensa', label: 'Mayor gasto: despensa' } },
       {
         id: "spending_insight",
         type: "text_block",
@@ -131,9 +134,33 @@ export function mockOverview(
         },
         actions: [{ id: "view_category_detail", trigger: "category_click", label: "Ver detalle" }],
       },
+      { id: 'detail_button', type: 'action_button', props: { label: 'Ver gastos de despensa', action: 'view_category_detail', params: { category_id: 'despensa' } } },
     ],
     suggested_prompts: overviewSuggestions(),
   };
+}
+
+/** Deterministic demo scenarios; this is not a language model. */
+export function mockMessage(conversationId: string, message: string): A2UIEnvelope {
+  const query = message.trim().toLocaleLowerCase('es-MX');
+  if (query === 'demo error') throw new Error('Error simulado. Puedes intentar otra pregunta o volver al resumen.');
+  if (query === 'demo vacío' || query === 'demo vacio') {
+    return { version: '1.0', intent: 'sin_resultados', conversation_id: conversationId, components: [] };
+  }
+  if (query === 'demo inválido' || query === 'demo invalido') {
+    return { ...mockOverview(conversationId), version: 'invalid' };
+  }
+
+  const categoryId = matchCategoryFromText(query);
+  if (categoryId) return mockCategoryDetail(conversationId, categoryId);
+
+  if (query.includes('más') || query.includes('mas') || query.includes('mayor')) {
+    return mockTopCategoryDetail(conversationId);
+  }
+  if (query.includes('todas') || query.includes('transacciones') || query.includes('movimientos')) {
+    return mockAllTransactions(conversationId);
+  }
+  return mockOverview(conversationId, query.includes('resumen') || query.includes('circular') ? 'pie_chart' : 'bar_chart');
 }
 
 export function mockCategoryDetail(conversationId: string, categoryId: string): A2UIEnvelope {

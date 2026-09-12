@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { A2UIEnvelope } from "./types/a2ui";
 import { ComponentRenderer } from "./components/registry";
 import { BankChrome } from "./components/BankChrome";
-import { loadDefaultOverview, newConversationId, sendAction, sendMessage } from "./lib/api";
+import { loadDefaultOverview, newConversationId, sendAction, sendMessage, usingMock } from "./lib/api";
 
 // Nombre del usuario demo — mismo que en los datos sintéticos de backend.
 // Cuando exista sesión real, esto viene del backend.
@@ -82,12 +82,16 @@ export default function App() {
   // preguntar nada primero.
   useEffect(() => {
     let cancelled = false;
-    loadDefaultOverview(conversationId.current).then((envelope) => {
-      if (!cancelled) {
-        showView(envelope);
-        setIsLoading(false);
-      }
-    });
+    loadDefaultOverview(conversationId.current)
+      .then((envelope) => {
+        if (!cancelled) showView(envelope);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "No se pudo cargar el resumen.");
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -99,9 +103,13 @@ export default function App() {
     setInput("");
     setLastQuestion(text);
     setIsLoading(true);
+    setError(null);
     try {
       const envelope = await sendMessage(text, conversationId.current);
       showView(envelope);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo enviar la pregunta.");
+      setInput(text); // no perder lo que ya había escrito si falla
     } finally {
       setIsLoading(false);
     }
@@ -112,14 +120,29 @@ export default function App() {
     ask(input.trim());
   }
 
-  async function handleAction(actionId: string, params?: Record<string, unknown>) {
+  async function handleAction(componentId: string, actionId: string, params?: Record<string, unknown>) {
     if (isLoading) return;
     setIsLoading(true);
+    setError(null);
     try {
-      const envelope = await sendAction(conversationId.current, actionId, params);
+      const envelope = await sendAction(conversationId.current, componentId, actionId, params);
       showView(envelope);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function reloadOverview() {
+    if (isLoading) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      showView(await loadDefaultOverview(conversationId.current));
+      setLastQuestion(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo cargar el resumen.");
     } finally {
       setIsLoading(false);
     }
@@ -140,6 +163,10 @@ export default function App() {
       <div className="sheet">
         <main className="screen">
           <div className="screen-inner">
+            {usingMock && (
+              <p className="demo-notice">Datos de ejemplo · prueba "barras", "resumen" o "despensa".</p>
+            )}
+
             {lastQuestion && (
               <div className="chat-row chat-row--user">
                 <div className="chat-bubble">{lastQuestion}</div>
@@ -148,19 +175,35 @@ export default function App() {
 
             {isLoading && <SkeletonCard />}
 
-            {view && !isLoading && (
+            {view && !isLoading && view.components.length > 0 && (
               <div key={viewKey} className="screen-content">
                 {view.components.map((component) => (
                   <ComponentRenderer
                     key={component.id}
                     component={component}
-                    onAction={(actionId, params) => handleAction(actionId, params)}
+                    onAction={(actionId, params) => handleAction(component.id, actionId, params)}
                   />
                 ))}
               </div>
             )}
 
-            {error && <div className="screen-error">{error}</div>}
+            {view && !isLoading && view.components.length === 0 && (
+              <div className="unknown-card" role="status">
+                No hay resultados para esta consulta.
+                <button className="breakdown-action" onClick={reloadOverview}>
+                  Volver al resumen
+                </button>
+              </div>
+            )}
+
+            {error && (
+              <div className="screen-error" role="alert">
+                {error}
+                <button className="breakdown-action" onClick={reloadOverview} disabled={isLoading}>
+                  Cargar resumen
+                </button>
+              </div>
+            )}
           </div>
         </main>
 
