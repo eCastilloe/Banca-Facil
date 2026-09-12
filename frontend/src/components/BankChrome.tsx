@@ -5,10 +5,8 @@ import { useEffect, useRef } from "react";
  * explícito del equipo: que esto se sienta como una pestaña más dentro de
  * banorte.com, no como una app aparte.
  *
- * Estructura calcada de banorte.com (barra de utilidad, header con
- * segmentos, fila de pestañas de producto) usando sus mismos tokens de
- * color/tipografía, pero SIN su logo real (marca registrada) — aquí va un
- * wordmark de texto. Todo lo que no sea "Entender mis gastos" es
+ * Marco visual inspirado en banorte.com con su logo público.
+ * Todo lo que no sea "Entender mis gastos" es
  * decorativo/inerte: no construimos esas secciones, solo el marco visual.
  */
 const SEGMENTS = ["Personal", "Empresas", "PyME", "Gobierno"];
@@ -37,7 +35,7 @@ export function BankChrome() {
 
       <div className="bank-main">
         <div className="bank-main-inner">
-          <span className="bank-logo">BANORTE</span>
+          <span className="bank-logo"><img src="https://www.banorte.com/dam/jcr:e96b09d5-b440-4d9f-bc51-d9f12a590cb8/Logo.svg" alt="Banorte" width="172" height="32" /></span>
 
           <nav className="bank-segments" aria-hidden="true">
             {SEGMENTS.map((s, i) => (
