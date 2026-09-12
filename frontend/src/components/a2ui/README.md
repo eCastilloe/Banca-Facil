@@ -1,6 +1,6 @@
 # Catálogo adicional A2UI
 
-Módulo independiente: no se importa automáticamente en App ni modifica el registro actual.
+Módulo conectado al registro principal del frontend. App recibe JSON validado desde `lib/api.ts` y utiliza este catálogo junto con TransactionList.
 Reutiliza las gráficas, formato MXN, colores y estilos que ya existen. No añade dependencias.
 
 ## Contratos
@@ -19,7 +19,7 @@ Se usa el vocabulario actual del frontend, en vez de introducir identificadores 
 Progress limita la barra a 0–100%, conserva los valores originales y avisa al superar max.
 Un max no positivo muestra “Objetivo no disponible”. Los números no finitos se rechazan en el renderer.
 
-## Integración posterior (no aplicada)
+## Uso directo
 
 ```tsx
 import { A2UIComponentRenderer } from './components/a2ui';
@@ -43,4 +43,4 @@ Los wrappers directos de las gráficas son de visualización; para acciones util
 
 `resolveComponent(name)` devuelve undefined para nombres desconocidos, incluidos nombres heredados de Object.
 El renderer muestra el fallback existente para tipos desconocidos y un mensaje para props inválidas.
-Este registro contiene solo los seis componentes nuevos/reutilizados; el registro actual conserva TransactionList.
+Este registro contiene los seis componentes nuevos/reutilizados; el registro principal añade TransactionList. Consulta `../../../A2UI-INTEGRATION.md` para probar el mock y configurar HTTP.

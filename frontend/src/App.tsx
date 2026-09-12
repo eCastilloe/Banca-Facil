@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { A2UIEnvelope } from "./types/a2ui";
 import { ComponentRenderer } from "./components/registry";
 import { BankChrome } from "./components/BankChrome";
-import { loadDefaultOverview, newConversationId, sendAction, sendMessage } from "./lib/api";
+import { loadDefaultOverview, newConversationId, sendAction, sendMessage, usingMock } from "./lib/api";
 
 export default function App() {
   const conversationId = useRef(newConversationId());
@@ -33,6 +33,11 @@ export default function App() {
         showView(envelope);
         setIsLoading(false);
       }
+    }).catch((err: unknown) => {
+      if (!cancelled) {
+        setError(err instanceof Error ? err.message : 'No se pudo cargar el resumen.');
+        setIsLoading(false);
+      }
     });
     return () => {
       cancelled = true;
@@ -48,22 +53,41 @@ export default function App() {
     setInput("");
     setLastQuestion(text);
     setIsLoading(true);
+    setError(null);
     try {
       const envelope = await sendMessage(text, conversationId.current);
       showView(envelope);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo enviar la pregunta.');
+      setInput(text);
     } finally {
       setIsLoading(false);
     }
   }
 
-  async function handleAction(actionId: string, params?: Record<string, unknown>) {
+  async function handleAction(componentId: string, actionId: string, params?: Record<string, unknown>) {
     if (isLoading) return;
     setIsLoading(true);
+    setError(null);
     try {
-      const envelope = await sendAction(conversationId.current, actionId, params);
+      const envelope = await sendAction(conversationId.current, componentId, actionId, params);
       showView(envelope);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function reloadOverview() {
+    if (isLoading) return;
+    setIsLoading(true);
+    setError(null);
+    try {
+      showView(await loadDefaultOverview(conversationId.current));
+      setLastQuestion(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudo cargar el resumen.');
     } finally {
       setIsLoading(false);
     }
@@ -75,13 +99,14 @@ export default function App() {
 
       <main className="screen">
         <div className="screen-inner">
+          {usingMock && <p className="demo-notice">Datos de ejemplo · Prueba “barras”, “resumen” o “despensa”.</p>}
           {lastQuestion && (
             <div className="chat-row chat-row--user">
               <div className="chat-bubble">{lastQuestion}</div>
             </div>
           )}
 
-          {isLoading && <div className="screen-loading">Pensando…</div>}
+          {isLoading && <div className="screen-loading" role="status">Pensando…</div>}
 
           {view && !isLoading && (
             <div key={viewKey} className="screen-content">
@@ -89,13 +114,22 @@ export default function App() {
                 <ComponentRenderer
                   key={component.id}
                   component={component}
-                  onAction={(actionId, params) => handleAction(actionId, params)}
+                  onAction={(actionId, params) => handleAction(component.id, actionId, params)}
                 />
               ))}
             </div>
           )}
 
-          {error && <div className="screen-error">{error}</div>}
+          {view && !isLoading && view.components.length === 0 && (
+            <div className="unknown-card" role="status">
+              No hay resultados para esta consulta.
+              <button className="breakdown-action" onClick={reloadOverview}>Volver al resumen</button>
+            </div>
+          )}
+          {error && <div className="screen-error" role="alert">
+            {error}
+            <button className="breakdown-action" onClick={reloadOverview} disabled={isLoading}>Cargar resumen</button>
+          </div>}
         </div>
       </main>
 
