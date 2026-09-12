@@ -27,7 +27,7 @@ export function BankChrome() {
     <>
       <div className="bank-utility">
         <div className="bank-utility-inner">
-          <span>Grupo Financiero Banorte</span>
+          <span className="bank-group">GRUPO FINANCIERO BANORTE <span aria-hidden="true">↗</span></span>
           <div className="bank-utility-right">
             <span>Ubícanos</span>
             <span>Banca en línea</span>

@@ -1,6 +1,6 @@
 # Catálogo adicional A2UI
 
-Módulo independiente: no se importa automáticamente en App ni modifica el registro actual.
+Módulo conectado al registro principal del frontend. App recibe JSON validado desde `lib/api.ts` y utiliza este catálogo junto con TransactionList.
 Reutiliza las gráficas, formato MXN, colores y estilos que ya existen. No añade dependencias.
 
 ## Contratos
@@ -19,7 +19,7 @@ Se usa el vocabulario actual del frontend, en vez de introducir identificadores 
 Progress limita la barra a 0–100%, conserva los valores originales y avisa al superar max.
 Un max no positivo muestra “Objetivo no disponible”. Los números no finitos se rechazan en el renderer.
 
-## Integración posterior (no aplicada)
+## Uso directo
 
 ```tsx
 import { A2UIComponentRenderer } from './components/a2ui';
@@ -36,11 +36,11 @@ import { A2UIComponentRenderer } from './components/a2ui';
 
 El registro recibe el envelope local existente `{ id, type, props, actions? }`.
 No implementa un parser universal del protocolo A2UI ni cambia el contrato del backend.
-Las gráficas conservan `actions` con trigger `category_click` y emiten `category_id`.
+Las gráficas usan `categories[].transactions` para mostrar el detalle localmente. No necesitan `actions` ni emiten `category_id`; “Volver” solo restaura la gráfica.
 ActionButton emite `props.action` y `props.params`; onAction siempre viene de React, nunca del JSON.
 Los componentes también se pueden importar por separado con sus props tipadas.
-Los wrappers directos de las gráficas son de visualización; para acciones utiliza el renderer.
+Los wrappers directos y el renderer soportan este detalle local; las otras acciones usan el callback del renderer.
 
 `resolveComponent(name)` devuelve undefined para nombres desconocidos, incluidos nombres heredados de Object.
 El renderer muestra el fallback existente para tipos desconocidos y un mensaje para props inválidas.
-Este registro contiene solo los seis componentes nuevos/reutilizados; el registro actual conserva TransactionList.
+Este registro contiene los seis componentes nuevos/reutilizados; el registro principal añade TransactionList. Consulta `../../../A2UI-INTEGRATION.md` para probar el mock y configurar HTTP.

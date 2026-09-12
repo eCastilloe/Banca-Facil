@@ -24,9 +24,11 @@
   --radius-xl: 16px;
 
   --shadow-card: 0 1px 2px rgba(50, 62, 72, 0.05), 0 8px 24px -14px rgba(50, 62, 72, 0.25);
+  --content-width: 880px;
 
   font-family: "Inter", system-ui, -apple-system, sans-serif;
   color-scheme: light;
+  font-synthesis: none;
 }
 
 * { box-sizing: border-box; }
@@ -38,23 +40,27 @@ body {
   background: var(--color-bg);
   color: var(--color-ink);
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 h1, h2, h3 { margin: 0; }
+button, input { font: inherit; }
+button, [role="button"], input { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--color-primary); outline-offset: 4px; }
 
 /* --- layout: la app ocupa toda la resolución disponible; el contenido
    interno se centra en una columna legible (--content-width) para que no
    se vea absurdo en pantallas anchas, pero el fondo/las barras sí llegan
    de borde a borde. --- */
 
-:root { --content-width: 880px; }
-
 .app-shell {
   width: 100%;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   background: var(--color-bg);
+  overflow: hidden;
 }
 
 /* --- chrome "sitio de Banorte": barra de utilidad + header + pestañas de
@@ -151,10 +157,59 @@ h1, h2, h3 { margin: 0; }
   .bank-utility, .bank-segments, .bank-actions { display: none; }
 }
 
+/* --- hero: franja roja de Banorte con saludo, arriba del "sheet" blanco
+   que trae el contenido. Patrón decorativo con gradientes, sin imágenes. --- */
+
+.hero {
+  flex: none;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-primary-active) 100%);
+}
+
+.hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 88% -20%, rgba(255, 255, 255, 0.22), transparent 55%),
+    repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 2px, transparent 2px 28px);
+  pointer-events: none;
+}
+
+.hero-inner {
+  position: relative;
+  z-index: 1;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 28px 24px 44px;
+}
+
+.hero-eyebrow { color: rgba(255, 255, 255, 0.85); font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.hero-title { color: white; font-size: 25px; font-weight: 800; margin-bottom: 6px; }
+.hero-subtitle { color: rgba(255, 255, 255, 0.85); font-size: 13.5px; }
+
+/* --- sheet: panel blanco que "sube" sobre el hero y contiene todo lo
+   interactivo (pantalla, sugerencias, input). --- */
+
+.sheet {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  margin-top: -20px;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 -8px 24px -18px rgba(50, 62, 72, 0.35);
+}
+
 /* --- pantalla única: se reemplaza en cada respuesta, no se acumula --- */
 
 .screen {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 24px;
 }
@@ -165,30 +220,36 @@ h1, h2, h3 { margin: 0; }
   display: flex;
   flex-direction: column;
   gap: 16px;
-  min-height: 100%;
-}
-
-.screen-empty {
-  margin: auto 0;
-  text-align: center;
-  color: var(--color-ink-muted);
-  font-size: 14px;
-}
-
-.screen-loading {
-  margin: auto 0;
-  text-align: center;
-  color: var(--color-ink-muted);
-  font-size: 14px;
 }
 
 .screen-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 10px 14px;
   border-radius: var(--radius-m);
   background: #fdecec;
   border: 1px solid var(--color-primary);
   color: var(--color-primary-active);
   font-size: 13px;
+}
+
+.demo-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-ink-muted);
+}
+
+.demo-notice::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-ink-subtle);
+  flex: none;
 }
 
 .screen-content {
@@ -215,8 +276,62 @@ h1, h2, h3 { margin: 0; }
   font-weight: 500;
 }
 
+/* --- prompts sugeridos: el agente manda un set distinto con cada
+   respuesta (ver A2UIEnvelope.suggested_prompts), siempre visibles pero
+   colapsables — el usuario decide si quiere verlos, no si existen. --- */
+
+.suggestions { flex: none; border-top: 1px solid var(--color-border-soft); }
+
+.suggestions-toggle {
+  width: 100%;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.suggestions-toggle:hover { color: var(--color-ink); }
+
+.suggestions-inner {
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 0 24px 12px;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.suggestion-chip {
+  flex: none;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.suggestion-chip:hover:not(:disabled) { border-color: var(--color-primary); color: var(--color-primary); background: #fdecec; }
+.suggestion-chip:disabled { opacity: 0.5; cursor: default; }
+
 .chat-input {
-  background: var(--color-surface);
+  flex: none;
   border-top: 1px solid var(--color-border-soft);
 }
 
@@ -299,28 +414,30 @@ h1, h2, h3 { margin: 0; }
 
 .breakdown-total { font-size: 14px; font-weight: 700; color: var(--color-ink); }
 
-/* pie chart */
+/* dona: SVG en vez de conic-gradient, para poder resaltar un segmento al
+   pasar el mouse por su fila correspondiente (y viceversa). */
 
-.breakdown-body--pie {
+.breakdown-body--donut {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 22px;
   flex-wrap: wrap;
 }
 
-.pie {
+.donut-wrap {
   flex: none;
-  width: 132px;
-  height: 132px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  width: 168px;
+  height: 168px;
 }
 
-.pie-hole {
-  width: 82px;
-  height: 82px;
+.donut-svg { width: 100%; height: 100%; }
+
+.donut-segment { transition: stroke-width 0.15s ease, stroke-dasharray 0.7s cubic-bezier(0.22, 1, 0.36, 1); }
+
+.donut-hole {
+  position: absolute;
+  inset: 26px;
   border-radius: 50%;
   background: var(--color-surface);
   display: flex;
@@ -328,12 +445,15 @@ h1, h2, h3 { margin: 0; }
   align-items: center;
   justify-content: center;
   text-align: center;
+  pointer-events: none;
 }
 
-.pie-total { font-size: 13px; font-weight: 700; color: var(--color-ink); }
-.pie-total-label { font-size: 10.5px; color: var(--color-ink-subtle); }
+.donut-total { font-size: 15px; font-weight: 800; color: var(--color-ink); }
+.donut-total-label { font-size: 10.5px; color: var(--color-ink-subtle); }
 
-.breakdown-legend {
+/* filas tipo "chip": ícono en pastilla de color suave + texto */
+
+.chip-list {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -341,28 +461,53 @@ h1, h2, h3 { margin: 0; }
   min-width: 200px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
-.legend-row {
+.chip-row {
   display: grid;
-  grid-template-columns: 8px 1fr auto auto;
+  grid-template-columns: 28px 1fr auto auto;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   font-size: 12.5px;
-  padding: 6px 8px;
-  border-radius: var(--radius-s);
+  padding: 5px 8px;
+  border-radius: var(--radius-m);
   cursor: pointer;
   transition: background 0.12s ease;
 }
 
-.legend-row:hover { background: rgba(235, 0, 41, 0.05); }
-.legend-dot { width: 8px; height: 8px; border-radius: 50%; }
-.legend-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-ink); font-weight: 500; }
-.legend-amount { font-weight: 700; white-space: nowrap; color: var(--color-ink); }
-.legend-percent { color: var(--color-ink-subtle); white-space: nowrap; }
+.chip-row:hover, .chip-row--hover { background: var(--color-bg); }
 
-/* bar chart */
+.chip-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.chip-icon-svg { width: 15px; height: 15px; }
+.chip-icon-dots { font-size: 10.5px; font-weight: 800; }
+
+.chip-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--color-ink); font-weight: 500; }
+.chip-amount { font-weight: 700; white-space: nowrap; color: var(--color-ink); }
+.chip-percent { color: var(--color-ink-subtle); white-space: nowrap; }
+
+.breakdown-collapse {
+  align-self: flex-start;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--color-primary);
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+
+/* barras */
 
 .bar-list {
   list-style: none;
@@ -370,21 +515,31 @@ h1, h2, h3 { margin: 0; }
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
-.bar-row { cursor: pointer; padding: 6px 8px; border-radius: var(--radius-s); transition: background 0.12s ease; }
-.bar-row:hover { background: rgba(235, 0, 41, 0.05); }
+.bar-row { cursor: pointer; padding: 6px 8px; border-radius: var(--radius-m); transition: background 0.12s ease; }
+.bar-row:hover { background: var(--color-bg); }
 
 .bar-row-top {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 10px;
   font-size: 13px;
-  margin-bottom: 6px;
+  margin-bottom: 7px;
 }
 
-.bar-label { font-weight: 600; color: var(--color-ink); }
+.bar-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+}
+
+.bar-label { font-weight: 600; color: var(--color-ink); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-amount { color: var(--color-ink-muted); white-space: nowrap; font-weight: 600; }
 
 .bar-track {
@@ -392,9 +547,10 @@ h1, h2, h3 { margin: 0; }
   border-radius: 4px;
   background: var(--color-bg);
   overflow: hidden;
+  margin-left: 36px;
 }
 
-.bar-fill { height: 100%; border-radius: 4px; }
+.bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
 
 /* transaction list */
 
@@ -423,41 +579,66 @@ h1, h2, h3 { margin: 0; }
 .tx-date { font-size: 11.5px; color: var(--color-ink-subtle); }
 .tx-amount { font-size: 13.5px; font-weight: 700; white-space: nowrap; }
 .tx-amount.negative { color: var(--color-primary-active); }
-.tx-amount.positive { color: var(--color-positive); }
-.tx-empty { color: var(--color-ink-muted); font-size: 13px; padding: 8px 4px; }
+.tx-amount.positive { color: #397b26; }
+.tx-empty { font-size: 13px; color: var(--color-ink-muted); padding: 20px 0; }
+.breakdown-action { align-self: flex-start; font-size: 12px; font-weight: 600; padding: 12px 20px; border: 1px solid var(--color-primary); border-radius: 5px; background: #fff; color: var(--color-primary); cursor: pointer; transition: background .15s, color .15s; }
+.breakdown-action:hover:not(:disabled) { background: var(--color-primary); color: #fff; }
+.breakdown-action:disabled { opacity: .5; cursor: default; }
+.unknown-card { display: flex; flex-direction: column; gap: 16px; border: 1px solid var(--color-border-soft); border-radius: 16px; background: #fff; padding: 28px; width: 100%; font-size: 14px; }
+.unknown-title { font-size: 14px; font-weight: 600; }
+.unknown-json { font-size: 12px; background: var(--color-bg); padding: 16px; border-radius: 6px; overflow-x: auto; margin: 0; color: var(--color-ink-muted); }
+/* iOS hace zoom automático en inputs con font-size < 16px, y el notch se
+   come el borde inferior sin el padding de safe-area. */
+@media (max-width: 520px) {
+  .chat-input input { font-size: 16px; }
+  .chat-input-inner { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+}
 
-.breakdown-action {
-  align-self: flex-start;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  padding: 9px 16px;
-  border-radius: var(--radius-m);
-  border: 1.5px solid var(--color-primary);
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* text_block: el "insight" del agente, suelto, sin tarjeta */
+
+.text-block { padding: 2px 2px 0; }
+.text-block-title { font-size: 15px; font-weight: 700; color: var(--color-ink); margin: 0; }
+.text-block-subtitle { font-size: 13px; color: var(--color-ink-muted); margin: 3px 0 0; }
+
+/* skeleton de carga: misma silueta que una breakdown-card, con shimmer */
+
+.skeleton-card {
   background: var(--color-surface);
-  color: var(--color-primary);
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  border: 1px solid var(--color-border-soft);
+  border-radius: var(--radius-l);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
-.breakdown-action:hover { background: var(--color-primary); color: white; }
-
-/* unknown component fallback */
-
-.unknown-card {
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-m);
-  padding: 12px 14px;
-  width: 100%;
+.skeleton-line,
+.skeleton-circle {
+  position: relative;
+  overflow: hidden;
+  background: var(--color-border-soft);
 }
 
-.unknown-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; color: var(--color-ink); }
-.unknown-json {
-  font-size: 11.5px;
-  background: var(--color-bg);
-  padding: 8px;
-  border-radius: var(--radius-s);
-  overflow-x: auto;
-  margin: 0;
-  color: var(--color-ink-muted);
+.skeleton-line::after,
+.skeleton-circle::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.7), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 1.3s infinite;
 }
+
+@keyframes shimmer {
+  to { transform: translateX(100%); }
+}
+
+.skeleton-line { height: 12px; border-radius: 6px; }
+.skeleton-line--sm { width: 130px; height: 10px; }
+.skeleton-body { display: flex; align-items: center; gap: 20px; }
+.skeleton-circle { width: 96px; height: 96px; border-radius: 50%; flex: none; }
+.skeleton-lines { flex: 1; display: flex; flex-direction: column; gap: 12px; }
