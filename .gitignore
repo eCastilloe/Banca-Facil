@@ -1,5 +1,6 @@
 .env
 CLAUDE.md
+backend/mcp_server/storage/*.json
 .claude/
 __pycache__/
 *.pyc
