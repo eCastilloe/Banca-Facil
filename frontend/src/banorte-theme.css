@@ -1,0 +1,142 @@
+/* Banorte presentation layer. Kept separate from component behavior. */
+:root {
+  --content-width: 1080px;
+  --color-bg: #f5f6f7;
+  --color-border-soft: #e5e8ea;
+  --color-ink-subtle: #68747d;
+  --radius-l: 16px;
+  --shadow-card: 0 4px 20px #323e4805;
+}
+.bank-utility-inner, .bank-main-inner, .bank-tabs-inner { max-width: 1280px; padding-inline: 40px; }
+.bank-utility-inner { min-height: 36px; padding-block: 6px; color: #fff; font-size: 11px; }
+.bank-group { font-weight: 600; letter-spacing: .025em; }
+.bank-group span { margin-left: 10px; opacity: .7; }
+.bank-utility-right { gap: 28px; opacity: .85; }
+.bank-main { background: var(--color-primary); border: 0; }
+.bank-main-inner { min-height: 76px; padding-block: 0; gap: 36px; }
+.bank-logo { display: inline-flex; color: #fff; }
+.bank-logo img { width: 172px; height: 32px; object-fit: contain; }
+.bank-segments { align-self: stretch; gap: 0; }
+.bank-segment { display: flex; align-items: center; padding: 0 20px; color: #fff; border: 0; font-size: 13px; }
+.bank-segment--active { background: var(--color-primary-hover); }
+.bank-actions { gap: 22px; }
+.bank-icon-btn { color: #fff; }
+.bank-enter-btn { color: #fff; border: 1px solid #ffffffb3; border-radius: 4px; padding: 9px 28px; }
+.bank-tabs-inner { gap: 34px; scrollbar-width: none; }
+.bank-tabs-inner::-webkit-scrollbar { display: none; }
+.bank-tab { padding: 16px 0 13px; font-size: 12px; font-weight: 500; border-bottom-width: 3px; }
+.bank-tab--active { font-weight: 700; }
+.hero { background: var(--color-bg); overflow: visible; }
+.hero::before { display: none; }
+.hero-inner { max-width: calc(var(--content-width) + 80px); padding: 28px 40px 22px; }
+.hero-eyebrow { color: var(--color-primary); font-size: 11px; letter-spacing: .08em; margin: 0 0 8px; }
+.hero-title { color: var(--color-ink); font-size: clamp(28px, 3vw, 38px); font-weight: 500; letter-spacing: -.045em; line-height: 1.2; margin: 0; }
+.hero-subtitle { color: var(--color-ink-muted); font-size: 14px; margin: 10px 0 0; }
+.sheet { background: var(--color-bg); border-radius: 0; margin-top: 0; box-shadow: none; }
+.screen { padding: 4px 40px 32px; scrollbar-gutter: stable; }
+.screen-inner { gap: 20px; }
+.demo-notice { font-size: 11px; margin: 0; }
+.screen-content { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.screen-content > * { grid-column: 1 / -1; min-width: 0; }
+.screen-content > .a2ui-progress, .screen-content > .a2ui-risk { grid-column: auto; }
+.screen-content > .a2ui-category, .screen-content > .a2ui-action { justify-self: start; }
+.breakdown-card { padding: 26px 30px; gap: 20px; }
+.breakdown-header { font-size: 14px; color: var(--color-ink); font-weight: 600; padding-bottom: 18px; border-bottom: 1px solid #edf0f1; }
+.breakdown-clamped { font-size: 10px; font-weight: 500; color: #78602d; background: #fff8e9; padding: 5px 10px; border: 0; border-radius: 4px; }
+.breakdown-total { font-size: 26px; font-weight: 600; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.breakdown-body--donut { gap: 46px; flex-wrap: nowrap; padding: 8px 0; }
+.donut-wrap { width: 236px; height: 236px; }
+.donut-hole { inset: 40px; }
+.donut-total { font-size: 29px; font-weight: 600; letter-spacing: -.05em; }
+.donut-total-label { font-size: 12px; margin-top: 4px; }
+.chip-list { min-width: 0; gap: 4px; }
+.chip-row { grid-template-columns: 32px minmax(0, 1fr) auto 44px; gap: 12px; padding: 10px 8px; font-size: 12px; }
+.chip-icon { width: 32px; height: 32px; border-radius: 8px; }
+.chip-label { white-space: normal; overflow-wrap: anywhere; color: var(--color-ink-muted); }
+.chip-amount { font-weight: 600; font-variant-numeric: tabular-nums; }
+.chip-percent { font-size: 11px; text-align: right; }
+.chip-row:hover, .chip-row--hover, .bar-row:hover { background: #fff4f6; }
+.bar-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px 30px; }
+.bar-row { padding: 10px 8px; }
+.bar-label { white-space: normal; font-weight: 500; font-size: 12px; overflow-wrap: anywhere; }
+.bar-amount { font-size: 12px; }
+.bar-track { height: 7px; background: #f0f2f3; }
+.breakdown-body--bars { display: flex; flex-direction: column; gap: 22px; }
+.breakdown-collapse { font-size: 12px; padding: 8px 2px; }
+.text-block { padding: 4px 2px; }
+.text-block-title { font-size: 16px; font-weight: 600; }
+.text-block-subtitle { font-size: 12px; line-height: 1.7; margin-top: 6px; }
+.tx-row { padding: 18px 0; gap: 16px; }
+.tx-desc { font-size: 14px; font-weight: 500; }
+.tx-date { font-size: 11px; margin-top: 5px; }
+.tx-amount { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.chat-bubble { background: var(--color-ink); padding: 12px 20px; max-width: 85%; overflow-wrap: anywhere; }
+.suggestions { background: #fff; padding-inline: 40px; }
+.suggestions-toggle { padding: 10px 0; text-transform: none; letter-spacing: 0; font-size: 11px; font-weight: 600; }
+.suggestions-inner { padding: 0 0 12px; scrollbar-width: none; }
+.suggestions-inner::-webkit-scrollbar { display: none; }
+.suggestion-chip { border-radius: 5px; font-size: 12px; font-weight: 500; padding: 8px 14px; background: #fff; border-color: var(--color-border-soft); }
+.suggestion-chip:hover:not(:disabled) { background: #fff4f6; }
+.chat-input { background: #fff; padding-inline: 40px; }
+.chat-input-inner { padding: 14px 0 20px; gap: 12px; }
+.chat-input input { padding: 14px 18px; border-radius: 6px; background: #fff; font-size: 13px; }
+.chat-input input:disabled { background: #f6f7f8; }
+.chat-input button { border-radius: 5px; font-size: 13px; padding: 12px 28px; }
+.chat-input button:disabled { background: #e5e8ea; color: #737d85; }
+.screen-error { padding: 20px 24px; background: #fff5f6; border-color: #f5cbd3; border-radius: 12px; }
+.skeleton-card { padding: 26px 30px; }
+.skeleton-circle { width: 180px; height: 180px; }
+@media (max-width: 1000px) {
+  .bank-main-inner { gap: 20px; }
+  .bank-segment { padding-inline: 14px; }
+  .breakdown-body--donut { gap: 24px; }
+  .donut-wrap { width: 200px; height: 200px; }
+  .donut-hole { inset: 34px; }
+  .donut-total { font-size: 25px; }
+}
+@media (max-width: 760px) {
+  .bank-segments, .bank-icon-btn { display: none; }
+  .bank-main-inner { justify-content: space-between; min-height: 64px; }
+  .bank-utility-inner, .bank-main-inner, .bank-tabs-inner { padding-inline: 24px; }
+  .hero-inner { padding: 24px 24px 20px; }
+  .hero-subtitle { font-size: 12px; }
+  .screen { padding: 0 24px 28px; }
+  .breakdown-card { padding: 22px; }
+  .breakdown-body--donut { flex-direction: column; gap: 20px; }
+  .chip-list { width: 100%; }
+  .bar-list { grid-template-columns: 1fr; gap: 12px; }
+  .suggestions, .chat-input { padding-inline: 24px; }
+}
+@media (max-width: 520px) {
+  .bank-actions { display: flex; }
+  .bank-main-inner, .bank-tabs-inner { padding-inline: 20px; }
+  .bank-logo img { width: 145px; }
+  .bank-enter-btn { padding: 7px 18px; font-size: 12px; }
+  .bank-tabs-inner { gap: 26px; }
+  .bank-tab { font-size: 11px; padding-block: 12px 10px; }
+  .hero-inner { padding: 18px 16px; }
+  .hero-eyebrow { font-size: 10px; margin-bottom: 5px; }
+  .hero-title { font-size: 28px; }
+  .hero-subtitle { margin-top: 7px; }
+  .screen { padding: 0 16px 24px; }
+  .screen-inner { gap: 16px; }
+  .screen-content { grid-template-columns: 1fr; gap: 14px; }
+  .demo-notice { font-size: 10px; }
+  .breakdown-card { padding: 20px 16px; }
+  .breakdown-header { font-size: 12px; flex-wrap: wrap; }
+  .chip-row { grid-template-columns: 28px minmax(0, 1fr) auto 36px; gap: 8px; padding: 10px 0; font-size: 11px; }
+  .chip-icon { width: 28px; height: 28px; }
+  .chip-percent { font-size: 10px; }
+  .suggestions, .chat-input { padding-inline: 16px; }
+  .chat-input-inner { padding: 12px 0 max(14px, env(safe-area-inset-bottom)); gap: 8px; }
+  .chat-input input { font-size: 16px; padding: 12px; }
+  .chat-input button { padding: 10px 16px; }
+  .screen-error { flex-direction: column; align-items: flex-start; }
+  .skeleton-circle { width: 96px; height: 96px; }
+}
+@media (max-height: 650px) {
+  .hero-inner { padding-block: 10px; }
+  .hero-title { font-size: 25px; }
+  .hero-eyebrow, .hero-subtitle { margin-block: 3px; }
+  .bank-main-inner { min-height: 54px; }
+}
