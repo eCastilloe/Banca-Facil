@@ -65,6 +65,35 @@ function topCategory() {
   return CATEGORIES.reduce((max, c) => (c.total > max.total ? c : max), CATEGORIES[0]);
 }
 
+function sortedByTotal() {
+  return [...CATEGORIES].sort((a, b) => b.total - a.total);
+}
+
+/** ¿El texto menciona alguna categoría por nombre? ("¿cuánto gasté en
+ * transporte?") — puro match de palabras clave, el LLM real interpretaría
+ * la intención de verdad. Usado tanto para rutear la pregunta como para
+ * armar sugerencias que el mock sepa responder de verdad. */
+export function matchCategoryFromText(text: string): string | null {
+  const q = text.toLowerCase();
+  const found = CATEGORIES.find((c) => q.includes(c.id));
+  return found?.id ?? null;
+}
+
+/** Arma las sugerencias de seguimiento para una respuesta de resumen —
+ * ofrece explorar la 2da categoría (la principal ya sale en el insight) y
+ * ver el detalle completo. */
+function overviewSuggestions(): string[] {
+  const [, second] = sortedByTotal();
+  return [`¿Cuánto gasté en ${second.label}?`, "Ver todas mis transacciones"];
+}
+
+/** Sugerencias después de ver el detalle de una categoría — invita a
+ * explorar otra distinta a la que ya se está viendo. */
+function categoryDetailSuggestions(currentCategoryId: string): string[] {
+  const other = sortedByTotal().find((c) => c.id !== currentCategoryId) ?? CATEGORIES[0];
+  return [`¿Cuánto gasté en ${other.label}?`, "Volver al resumen"];
+}
+
 /** El LLM decide libremente el `type` — en el mock lo simulamos con un
  * default de `pie_chart` (lo que se ve al abrir la app, sin que el usuario
  * tenga que preguntar nada), pero cuando la pregunta es explícita el mock
@@ -103,6 +132,7 @@ export function mockOverview(
         actions: [{ id: "view_category_detail", trigger: "category_click", label: "Ver detalle" }],
       },
     ],
+    suggested_prompts: overviewSuggestions(),
   };
 }
 
@@ -126,6 +156,7 @@ export function mockCategoryDetail(conversationId: string, categoryId: string): 
         actions: [{ id: "back_to_overview", label: "Volver al resumen" }],
       },
     ],
+    suggested_prompts: categoryDetailSuggestions(categoryId),
   };
 }
 
@@ -169,5 +200,6 @@ export function mockAllTransactions(conversationId: string): A2UIEnvelope {
         actions: [{ id: "back_to_overview", label: "Volver al resumen" }],
       },
     ],
+    suggested_prompts: [`¿Cuánto gasté en ${topCategory().label}?`, "Volver al resumen"],
   };
 }

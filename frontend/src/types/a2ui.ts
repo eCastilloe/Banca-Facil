@@ -69,6 +69,13 @@ export type A2UIEnvelope = {
   intent: string;
   conversation_id: string;
   components: A2UIComponent[];
+  /** Preguntas de seguimiento sugeridas para ESTA respuesta puntual — el
+   * agente las arma según el contexto de lo que se acaba de mostrar, no
+   * es una lista fija del frontend. Va aparte de `components` porque no
+   * es contenido para pintar, es una afordancia de navegación; el
+   * frontend decide cómo mostrarla (barra colapsable, fija arriba del
+   * input), no si mostrarla. */
+  suggested_prompts?: string[];
 };
 
 /** Lo que el frontend manda de vuelta al agente cuando el usuario

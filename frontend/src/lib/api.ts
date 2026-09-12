@@ -1,15 +1,5 @@
 import type { A2UIEnvelope } from "../types/a2ui";
-import { mockOverview, mockCategoryDetail, mockTopCategoryDetail, mockAllTransactions } from "./mockAgent";
-
-/** Preguntas de arranque rápido — bajan la fricción de la pantalla en
- * blanco y, de paso, muestran la variedad de intenciones que el agente
- * puede resolver dentro de "entender gastos". Cada una mapea a una
- * respuesta distinta del mock (ver sendMessage). */
-export const SUGGESTED_PROMPTS = [
-  "¿En qué se me fue el dinero este trimestre?",
-  "¿En qué categoría gasté más?",
-  "Ver todas mis transacciones",
-];
+import { mockOverview, mockCategoryDetail, mockTopCategoryDetail, mockAllTransactions, matchCategoryFromText } from "./mockAgent";
 
 /**
  * Punto único de contacto con el agente. Hoy responde con datos
@@ -30,6 +20,10 @@ export async function sendMessage(text: string, conversationId: string): Promise
   await delay(300);
   const q = text.toLowerCase();
 
+  const categoryId = matchCategoryFromText(q);
+  if (categoryId) {
+    return mockCategoryDetail(conversationId, categoryId);
+  }
   if (q.includes("más") || q.includes("mayor") || q.includes("mas gast")) {
     return mockTopCategoryDetail(conversationId);
   }

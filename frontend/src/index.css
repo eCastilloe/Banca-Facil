@@ -249,15 +249,37 @@ h1, h2, h3 { margin: 0; }
   font-weight: 500;
 }
 
-/* --- prompts sugeridos: solo antes de la primera pregunta, para bajar la
-   fricción de la pantalla en blanco. --- */
+/* --- prompts sugeridos: el agente manda un set distinto con cada
+   respuesta (ver A2UIEnvelope.suggested_prompts), siempre visibles pero
+   colapsables — el usuario decide si quiere verlos, no si existen. --- */
 
 .suggestions { flex: none; border-top: 1px solid var(--color-border-soft); }
+
+.suggestions-toggle {
+  width: 100%;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: 10px 24px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-ink-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.suggestions-toggle:hover { color: var(--color-ink); }
 
 .suggestions-inner {
   max-width: var(--content-width);
   margin: 0 auto;
-  padding: 12px 24px 0;
+  padding: 0 24px 12px;
   display: flex;
   gap: 8px;
   overflow-x: auto;

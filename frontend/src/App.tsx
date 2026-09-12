@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { A2UIEnvelope } from "./types/a2ui";
 import { ComponentRenderer } from "./components/registry";
 import { BankChrome } from "./components/BankChrome";
-import { loadDefaultOverview, newConversationId, sendAction, sendMessage, SUGGESTED_PROMPTS } from "./lib/api";
+import { loadDefaultOverview, newConversationId, sendAction, sendMessage } from "./lib/api";
 
 // Nombre del usuario demo — mismo que en los datos sintéticos de backend.
 // Cuando exista sesión real, esto viene del backend.
@@ -27,6 +27,14 @@ const HERO_SUBTITLES = [
 
 function randomHeroSubtitle(): string {
   return HERO_SUBTITLES[Math.floor(Math.random() * HERO_SUBTITLES.length)];
+}
+
+function ChevronIcon({ up }: { up: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" width="14" height="14" fill="none" style={{ transform: up ? "rotate(180deg)" : "none" }}>
+      <path d="M4 6.5 8 10.5 12 6.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 function SkeletonCard() {
@@ -57,6 +65,9 @@ export default function App() {
   const [view, setView] = useState<A2UIEnvelope | null>(null);
   const [viewKey, setViewKey] = useState(0);
   const [lastQuestion, setLastQuestion] = useState<string | null>(null);
+  // Preferencia del usuario, no del mensaje — se mantiene igual aunque
+  // cambien las sugerencias con cada respuesta nueva.
+  const [suggestionsExpanded, setSuggestionsExpanded] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -153,15 +164,27 @@ export default function App() {
           </div>
         </main>
 
-        {!lastQuestion && (
+        {view?.suggested_prompts && view.suggested_prompts.length > 0 && (
           <div className="suggestions">
-            <div className="suggestions-inner">
-              {SUGGESTED_PROMPTS.map((prompt) => (
-                <button key={prompt} className="suggestion-chip" onClick={() => ask(prompt)} disabled={isLoading}>
-                  {prompt}
-                </button>
-              ))}
-            </div>
+            <button
+              type="button"
+              className="suggestions-toggle"
+              onClick={() => setSuggestionsExpanded((v) => !v)}
+              aria-expanded={suggestionsExpanded}
+            >
+              Preguntas sugeridas
+              <ChevronIcon up={suggestionsExpanded} />
+            </button>
+
+            {suggestionsExpanded && (
+              <div className="suggestions-inner">
+                {view.suggested_prompts.map((prompt) => (
+                  <button key={prompt} className="suggestion-chip" onClick={() => ask(prompt)} disabled={isLoading}>
+                    {prompt}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
