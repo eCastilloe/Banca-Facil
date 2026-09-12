@@ -99,6 +99,19 @@ export default function App() {
 
       <main className="screen">
         <div className="screen-inner">
+          <header className="page-intro">
+            <p className="breadcrumb">Personal <span aria-hidden="true">/</span> Entender mis gastos</p>
+            <div className="page-intro-row">
+              <div>
+                <p className="eyebrow">TU DINERO, MÁS CLARO</p>
+                <h1>Entender mis gastos</h1>
+                <p className="page-description">Una mirada a tus gastos para tomar mejores decisiones.</p>
+              </div>
+              <span className="intro-symbol" aria-hidden="true">
+                <svg viewBox="0 0 48 48" fill="none"><path d="M10 35V25M24 35V16M38 35V7" stroke="currentColor" strokeWidth="5" strokeLinecap="round" /><path d="M6 43H43" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+              </span>
+            </div>
+          </header>
           {usingMock && <p className="demo-notice">Datos de ejemplo · Prueba “barras”, “resumen” o “despensa”.</p>}
           {lastQuestion && (
             <div className="chat-row chat-row--user">
@@ -134,16 +147,18 @@ export default function App() {
       </main>
 
       <form className="chat-input" onSubmit={handleSubmit}>
+        <div className="chat-caption"><span className="assistant-mark" aria-hidden="true">✦</span> Consulta tus gastos <span className="chat-caption-detail">Escribe una pregunta y explora tu información</span></div>
         <div className="chat-input-inner">
           <input
             type="text"
+            aria-label="Escribe tu pregunta"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Escribe tu pregunta…"
             disabled={isLoading}
           />
           <button type="submit" disabled={isLoading || !input.trim()}>
-            Enviar
+            Enviar <span aria-hidden="true">↗</span>
           </button>
         </div>
       </form>
