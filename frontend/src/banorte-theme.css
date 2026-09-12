@@ -28,8 +28,8 @@
 .bank-tab--active { font-weight: 700; }
 .hero { background: var(--color-bg); overflow: visible; }
 .hero::before { display: none; }
-.hero-inner { max-width: calc(var(--content-width) + 80px); padding: 28px 40px 22px; }
-.hero-eyebrow { color: var(--color-primary); font-size: 11px; letter-spacing: .08em; margin: 0 0 8px; }
+.hero-inner { max-width: var(--content-width); padding: 24px 0 2px; }
+.hero-eyebrow { color: var(--color-primary); font-size: 15px; letter-spacing: .04em; margin: 0 0 8px; }
 .hero-title { color: var(--color-ink); font-size: clamp(28px, 3vw, 38px); font-weight: 500; letter-spacing: -.045em; line-height: 1.2; margin: 0; }
 .hero-subtitle { color: var(--color-ink-muted); font-size: 14px; margin: 10px 0 0; }
 .sheet { background: var(--color-bg); border-radius: 0; margin-top: 0; box-shadow: none; }
@@ -98,7 +98,7 @@
   .bank-segments, .bank-icon-btn { display: none; }
   .bank-main-inner { justify-content: space-between; min-height: 64px; }
   .bank-utility-inner, .bank-main-inner, .bank-tabs-inner { padding-inline: 24px; }
-  .hero-inner { padding: 24px 24px 20px; }
+  .hero-inner { padding: 24px 0 0; }
   .hero-subtitle { font-size: 12px; }
   .screen { padding: 0 24px 28px; }
   .breakdown-card { padding: 22px; }
@@ -114,8 +114,8 @@
   .bank-enter-btn { padding: 7px 18px; font-size: 12px; }
   .bank-tabs-inner { gap: 26px; }
   .bank-tab { font-size: 11px; padding-block: 12px 10px; }
-  .hero-inner { padding: 18px 16px; }
-  .hero-eyebrow { font-size: 10px; margin-bottom: 5px; }
+  .hero-inner { padding: 18px 0 0; }
+  .hero-eyebrow { font-size: 14px; margin-bottom: 5px; }
   .hero-title { font-size: 28px; }
   .hero-subtitle { margin-top: 7px; }
   .screen { padding: 0 16px 24px; }

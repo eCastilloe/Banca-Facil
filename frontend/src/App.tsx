@@ -152,17 +152,16 @@ export default function App() {
     <div className="app-shell">
       <BankChrome />
 
-      <div className="hero">
-        <div className="hero-inner">
-          <p className="hero-eyebrow">{greeting()}</p>
-          <h1 className="hero-title">Entender mis gastos</h1>
-          <p className="hero-subtitle">{heroSubtitle}</p>
-        </div>
-      </div>
-
       <div className="sheet">
         <main className="screen">
           <div className="screen-inner">
+            <div className="hero">
+              <div className="hero-inner">
+                <p className="hero-eyebrow">{greeting()}</p>
+                <h1 className="hero-title">Entender mis gastos</h1>
+                <p className="hero-subtitle">{heroSubtitle}</p>
+              </div>
+            </div>
             {usingMock && (
               <p className="demo-notice">Datos de ejemplo · prueba "barras", "resumen" o "despensa".</p>
             )}
