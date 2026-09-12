@@ -79,6 +79,34 @@ def test_llm_no_responde_para_un_concepto_cae_en_otros(cache_aislada):
     assert resultado["TIENDA DESCONOCIDA"] == "Otros"
 
 
+def test_llm_que_lanza_excepcion_cae_en_otros_sin_tumbar_la_consulta(cache_aislada):
+    def llm_roto(conceptos, categorias):
+        raise RuntimeError("429 Resource exhausted")
+
+    resultado = classification.clasificar_conceptos(
+        ["WALMART", "TIENDA DESCONOCIDA"], llm_roto
+    )
+    assert resultado["WALMART"] == "Despensa"
+    assert resultado["TIENDA DESCONOCIDA"] == "Otros"
+
+
+def test_llm_que_lanza_excepcion_no_cachea_para_poder_reintentar_despues(cache_aislada):
+    llamadas = []
+
+    def llm_intermitente(conceptos, categorias):
+        llamadas.append(list(conceptos))
+        if len(llamadas) == 1:
+            raise RuntimeError("429 Resource exhausted")
+        return {c: "Compras" for c in conceptos}
+
+    primera = classification.clasificar_conceptos(["TIENDA DESCONOCIDA"], llm_intermitente)
+    assert primera["TIENDA DESCONOCIDA"] == "Otros"
+
+    segunda = classification.clasificar_conceptos(["TIENDA DESCONOCIDA"], llm_intermitente)
+    assert segunda["TIENDA DESCONOCIDA"] == "Compras"
+    assert len(llamadas) == 2
+
+
 def test_categorias_pasadas_al_llm_son_las_8_validas(cache_aislada):
     categorias_recibidas = {}
 
