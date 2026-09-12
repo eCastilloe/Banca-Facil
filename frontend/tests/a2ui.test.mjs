@@ -7,8 +7,8 @@ import { validTransactionProps } from '../src/lib/validateTransactions.ts';
 
 test('sample JSON survives the reception boundary and includes the new catalog', () => {
   const result = parseEnvelope(JSON.stringify(mockOverview('test')), 'test');
-  assert.deepEqual(result.components.map(c => c.type), ['progress', 'risk_indicator', 'category_badge', 'pie_chart', 'action_button']);
-  const names = { progress: 'Progress', risk_indicator: 'RiskIndicator', category_badge: 'CategoryBadge', pie_chart: 'PieChart', action_button: 'ActionButton' };
+  assert.deepEqual(result.components.map(c => c.type), ['progress', 'risk_indicator', 'category_badge', 'text_block', 'pie_chart', 'action_button']);
+  const names = { progress: 'Progress', risk_indicator: 'RiskIndicator', category_badge: 'CategoryBadge', text_block: 'TextBlock', pie_chart: 'PieChart', action_button: 'ActionButton' };
   for (const component of result.components) assert.equal(validProps(names[component.type], component.props), true);
 });
 

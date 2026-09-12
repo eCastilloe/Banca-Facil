@@ -22,6 +22,7 @@ export function validProps<K extends keyof ComponentPropsMap>(name: K, p: unknow
       && (p.variant === undefined || p.variant === 'primary' || p.variant === 'secondary')
       && (p.disabled === undefined || typeof p.disabled === 'boolean') && (p.params === undefined || object(p.params));
     case 'RiskIndicator': return ['low', 'medium', 'high'].includes(String(p.level)) && text(p.label) && optionalText(p.description);
+    case 'TextBlock': return text(p.title) && optionalText(p.subtitle);
     default: return false;
   }
 }

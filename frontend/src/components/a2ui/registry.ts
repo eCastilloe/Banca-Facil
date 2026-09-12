@@ -2,6 +2,7 @@ import { createElement, type ComponentType } from 'react';
 import type { RendererProps } from '../types';
 import { PieChart as ExistingPieChart } from '../PieChart';
 import { BarChart as ExistingBarChart } from '../BarChart';
+import { TextBlock as ExistingTextBlock } from '../TextBlock';
 import { UnknownComponent } from '../UnknownComponent';
 import { Progress } from './Progress';
 import { CategoryBadge } from './CategoryBadge';
@@ -26,10 +27,11 @@ export const componentRegistry = Object.freeze({
   CategoryBadge: adapter('CategoryBadge', props => createElement(CategoryBadge, props)),
   ActionButton: adapter('ActionButton', (props, { onAction }) => createElement(ActionButton, { ...props, onAction })),
   RiskIndicator: adapter('RiskIndicator', props => createElement(RiskIndicator, props)),
+  TextBlock: adapter('TextBlock', (_props, context) => createElement(ExistingTextBlock, context)),
 });
 
 const aliases: Readonly<Record<string, keyof typeof componentRegistry>> = Object.freeze({
-  pie_chart: 'PieChart', bar_chart: 'BarChart', progress: 'Progress', category_badge: 'CategoryBadge', action_button: 'ActionButton', risk_indicator: 'RiskIndicator',
+  pie_chart: 'PieChart', bar_chart: 'BarChart', progress: 'Progress', category_badge: 'CategoryBadge', action_button: 'ActionButton', risk_indicator: 'RiskIndicator', text_block: 'TextBlock',
 });
 
 export function resolveComponent(name: string): ComponentType<RendererProps> | undefined {
