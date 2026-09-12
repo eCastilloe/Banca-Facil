@@ -67,7 +67,7 @@ from pydantic import BaseModel
 load_dotenv()
 
 BACKEND_DIR = Path(__file__).parent
-MODEL = "gemini-2.5-flash"  # ajustar si el equipo decide otro modelo
+MODEL = "gemini-3.6-flash"  # ajustar si el equipo decide otro modelo
 
 TOPE_MESES = 3
 
