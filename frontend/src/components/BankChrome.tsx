@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
  * Estructura calcada de banorte.com (barra de utilidad, header con
  * segmentos, fila de pestañas de producto) usando sus mismos tokens de
  * color/tipografía, pero SIN su logo real (marca registrada) — aquí va un
- * wordmark de texto. Todo lo que no sea "Entender mis gastos" es
+ * wordmark de texto. Todo lo que no sea "Entiende tus finanzas" es
  * decorativo/inerte: no construimos esas secciones, solo el marco visual.
  */
 const SEGMENTS = ["Personal", "Empresas", "PyME", "Gobierno"];
@@ -67,7 +67,7 @@ export function BankChrome() {
             </span>
           ))}
           <span ref={activeTabRef} className="bank-tab bank-tab--active">
-            Entender mis gastos
+            Entiende tus finanzas
           </span>
         </div>
       </div>
