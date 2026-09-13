@@ -237,10 +237,17 @@ ningún límite máximo de rango: eso se aplica después."""
 
 
 def _aplicar_tope(solicitado_inicio: date, solicitado_fin: date) -> tuple[date, date, bool]:
-    tope_minimo = date.today() - timedelta(days=TOPE_MESES * 31)
+    hoy = date.today()
+    tope_minimo = hoy - timedelta(days=TOPE_MESES * 31)
     inicio_real = max(solicitado_inicio, tope_minimo)
-    fue_recortado = inicio_real != solicitado_inicio
-    return inicio_real, solicitado_fin, fue_recortado
+    # El router a veces resuelve "el mes actual" como el mes completo
+    # (ej. hasta el día 30 aunque hoy sea el 12) -- data.py genera
+    # transacciones de forma determinista por fecha, sin saber qué es "hoy",
+    # así que felizmente fabricaría gasto de días que todavía no pasan en
+    # la historia. Nunca se debe pedir más allá de hoy.
+    fin_real = min(solicitado_fin, hoy)
+    fue_recortado = inicio_real != solicitado_inicio or fin_real != solicitado_fin
+    return inicio_real, fin_real, fue_recortado
 
 
 # --- Paso 3: decidir tipo de gráfica + mensaje ------------------------------
