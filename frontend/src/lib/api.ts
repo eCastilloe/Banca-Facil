@@ -12,7 +12,8 @@ import { parseEnvelope } from './parseEnvelope';
 const endpoint = import.meta.env.VITE_A2UI_ENDPOINT?.trim();
 export const usingMock = !endpoint;
 
-const DEFAULT_TIMEOUT_MS = 15000;
+// El diagnóstico puede consultar MCP y generar una interpretación además del router.
+const DEFAULT_TIMEOUT_MS = 60000;
 // VITE_A2UI_TIMEOUT_MS es opcional -- si no está o no es un número válido,
 // se usa el default de arriba.
 const timeoutMs = (() => {

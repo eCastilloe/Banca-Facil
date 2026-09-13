@@ -39,34 +39,16 @@ function ChevronIcon({ up }: { up: boolean }) {
   );
 }
 
-function SkeletonCard() {
-  return (
-    <div className="skeleton-card" aria-hidden="true">
-      <div className="skeleton-line skeleton-line--sm" />
-      <div className="skeleton-body">
-        <div className="skeleton-circle" />
-        <div className="skeleton-lines">
-          <div className="skeleton-line" />
-          <div className="skeleton-line" />
-          <div className="skeleton-line" />
-          <div className="skeleton-line" />
-        </div>
-      </div>
-    </div>
-  );
-}
+type ChatEntry = { id: number; role: "user"; text: string } | { id: number; role: "assistant"; envelope: A2UIEnvelope };
 
 export default function App() {
   const conversationId = useRef(newConversationId());
 
-  // Una sola pantalla activa a la vez: cada respuesta del agente la
-  // REEMPLAZA (clic en categoría, "volver al resumen", nueva pregunta),
-  // nunca se apila. `viewKey` solo sirve para retriggerear la animación
-  // de entrada cuando cambia el contenido.
   const [heroSubtitle] = useState(randomHeroSubtitle);
   const [view, setView] = useState<A2UIEnvelope | null>(null);
-  const [viewKey, setViewKey] = useState(0);
-  const [lastQuestion, setLastQuestion] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatEntry[]>([]);
+  const nextMessageId = useRef(0);
+  const latestMessage = useRef<HTMLDivElement>(null);
   // Preferencia del usuario, no del mensaje — se mantiene igual aunque
   // cambien las sugerencias con cada respuesta nueva.
   const [suggestionsExpanded, setSuggestionsExpanded] = useState(true);
@@ -74,9 +56,16 @@ export default function App() {
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
+  useEffect(() => {
+    if (messages.length > 1 || isLoading) {
+      latestMessage.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [messages, isLoading]);
+
   function showView(envelope: A2UIEnvelope) {
     setView(envelope);
-    setViewKey((k) => k + 1);
+    const id = nextMessageId.current++;
+    setMessages((previous) => [...previous, { id, role: "assistant", envelope }]);
     setError(null);
   }
 
@@ -103,7 +92,8 @@ export default function App() {
   async function ask(text: string) {
     if (!text || isLoading) return;
     setInput("");
-    setLastQuestion(text);
+    const id = nextMessageId.current++;
+    setMessages((previous) => [...previous, { id, role: "user", text }]);
     setIsLoading(true);
     setError(null);
     try {
@@ -142,7 +132,7 @@ export default function App() {
     setError(null);
     try {
       showView(await loadDefaultOverview(conversationId.current));
-      setLastQuestion(null);
+
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo cargar el resumen.");
     } finally {
@@ -160,7 +150,7 @@ export default function App() {
             <div className="hero">
               <div className="hero-inner">
                 <p className="hero-eyebrow">{greeting()}</p>
-                <h1 className="hero-title">Entiende tus finanzas</h1>
+                <h1 className="hero-title">Hablemos de tu dinero<span className="hero-spark"> ✦</span></h1>
                 <p className="hero-subtitle">{heroSubtitle}</p>
               </div>
             </div>
@@ -168,34 +158,36 @@ export default function App() {
               <p className="demo-notice">Datos de ejemplo · prueba "barras", "resumen" o "despensa".</p>
             )}
 
-            {lastQuestion && (
-              <div className="chat-row chat-row--user">
-                <div className="chat-bubble">{lastQuestion}</div>
-              </div>
-            )}
-
-            {isLoading && <SkeletonCard />}
-
-            {view && !isLoading && view.components.length > 0 && (
-              <div key={viewKey} className="screen-content">
-                {view.components.map((component) => (
-                  <ComponentRenderer
-                    key={component.id}
-                    component={component}
-                    onAction={(actionId, params) => handleAction(component.id, actionId, params)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {view && !isLoading && view.components.length === 0 && (
-              <div className="unknown-card" role="status">
-                No hay resultados para esta consulta.
-                <button className="breakdown-action" onClick={reloadOverview}>
-                  Volver al resumen
-                </button>
-              </div>
-            )}
+            <div className="conversation-divider"><span>Tu espacio para hablar de dinero</span></div>
+            <div className="chat-timeline" role="log" aria-label="Conversación">
+              {messages.map((entry, index) => (
+                <div key={entry.id} ref={index === messages.length - 1 ? latestMessage : undefined}
+                  className={`chat-entry chat-entry--${entry.role}`}>
+                  {entry.role === "user" ? (
+                    <div className="chat-row chat-row--user">
+                      <div className="message-stack"><span className="message-author">Tú</span>
+                        <div className="chat-bubble">{entry.text}</div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="assistant-message">
+                      <div className="assistant-avatar" aria-hidden="true">✦</div>
+                      <div className="assistant-body">
+                        <span className="message-author">Banca Fácil <span className="assistant-tag">Tu asistente</span></span>
+                        <div className="screen-content">
+                          {entry.envelope.components.map((component) => (
+                            <ComponentRenderer key={component.id} component={component}
+                              onAction={(actionId, params) => handleAction(component.id, actionId, params)} />
+                          ))}
+                          {entry.envelope.components.length === 0 && <div className="text-block">No encontré resultados para esta consulta.</div>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {isLoading && <div className="typing-indicator" role="status"><span /><span /><span /><p>Revisando tus números</p></div>}
 
             {error && (
               <div className="screen-error" role="alert">
@@ -238,11 +230,12 @@ export default function App() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Escribe tu pregunta…"
+              aria-label="Tu mensaje"
+              placeholder="¿Qué tienes en mente?"
               disabled={isLoading}
             />
             <button type="submit" disabled={isLoading || !input.trim()}>
-              Enviar
+              Enviar <span aria-hidden="true">↗</span>
             </button>
           </div>
         </form>
