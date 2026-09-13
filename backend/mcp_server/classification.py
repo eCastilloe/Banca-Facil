@@ -133,8 +133,18 @@ def clasificar_conceptos(
         elif concepto not in pendientes:
             pendientes.append(concepto)
 
+    respuestas = None
     if pendientes and llm_classify_fn is not None:
-        respuestas = llm_classify_fn(pendientes, CATEGORIAS)
+        try:
+            respuestas = llm_classify_fn(pendientes, CATEGORIAS)
+        except Exception:
+            # Cuota agotada (429), red caída, lo que sea: la consulta completa
+            # no debe tumbarse por esto. Los pendientes caen en Otros para
+            # esta respuesta, pero NO se cachean -- una falla transitoria no
+            # debe condenar un concepto a Otros para siempre.
+            respuestas = None
+
+    if respuestas is not None:
         for concepto in pendientes:
             categoria = respuestas.get(concepto)
             resultado[concepto] = categoria if categoria in CATEGORIAS else CATEGORIA_OTROS
