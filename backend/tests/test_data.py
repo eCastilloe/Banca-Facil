@@ -74,3 +74,16 @@ def test_crear_limite_gasto_categoria_invalida_lanza_error(limites_aislados):
 def test_crear_limite_gasto_monto_no_positivo_lanza_error(limites_aislados):
     with pytest.raises(ValueError):
         data.crear_limite_gasto("Despensa", 0)
+
+
+def test_crear_limite_gasto_no_deja_archivo_temporal_tras_guardar(limites_aislados):
+    data.crear_limite_gasto("Despensa", 3000.0)
+    # La escritura es atómica (tmp + os.replace): no debe quedar basura.
+    assert list(data.STORAGE_DIR.glob("*.tmp")) == []
+
+
+def test_leer_limites_con_json_corrupto_no_tumba_y_regresa_vacio(limites_aislados):
+    data.STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    data.LIMITES_PATH.write_text("{esto no es json valido", encoding="utf-8")
+
+    assert data.obtener_limites_gasto() == []

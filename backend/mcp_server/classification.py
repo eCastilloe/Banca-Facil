@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import calendar
 import json
+import os
 import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
@@ -105,14 +106,23 @@ def _clasificar_por_diccionario(concepto: str) -> str | None:
 def _cargar_cache() -> dict[str, str]:
     if not CACHE_PATH.exists():
         return {}
-    return json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+    try:
+        return json.loads(CACHE_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        # Caché corrupta (misma idea que data._leer_limites): se pierde el
+        # ahorro de llamadas ya resueltas, pero no debe tumbar cada consulta
+        # -- simplemente se vuelve a preguntar al LLM lo que ya se sabía.
+        return {}
 
 
 def _guardar_cache(cache: dict[str, str]) -> None:
+    """Escritura atómica -- ver el docstring de `data._guardar_limites`."""
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-    CACHE_PATH.write_text(
+    tmp_path = CACHE_PATH.with_suffix(".tmp")
+    tmp_path.write_text(
         json.dumps(cache, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
     )
+    os.replace(tmp_path, CACHE_PATH)
 
 
 def clasificar_conceptos(

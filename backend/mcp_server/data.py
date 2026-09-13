@@ -14,6 +14,7 @@ usuario.
 from __future__ import annotations
 
 import json
+import os
 import random
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -102,14 +103,32 @@ def obtener_transacciones(fecha_inicio: date, fecha_fin: date) -> list[Transacci
 def _leer_limites() -> list[dict]:
     if not LIMITES_PATH.exists():
         return []
-    return json.loads(LIMITES_PATH.read_text(encoding="utf-8"))
+    try:
+        return json.loads(LIMITES_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        # Archivo corrupto (ej. el proceso murió a media escritura antes de
+        # que existiera la escritura atómica de abajo). Perder los límites
+        # guardados es preferible a que CADA consulta tumbe con un 500 por
+        # un JSON roto -- la app sigue disponible, solo sin límites hasta
+        # que el usuario cree uno nuevo.
+        return []
 
 
 def _guardar_limites(limites: list[dict]) -> None:
+    """Escritura atómica: tmp file + os.replace.
+
+    Sin esto, un proceso matado a media escritura (ej. alguien cierra la
+    terminal del backend en mal momento durante la demo) deja el JSON
+    truncado, y la siguiente lectura tumba con JSONDecodeError -- la
+    plataforma completa deja de responder por un archivo de 200 bytes.
+    os.replace es atómico en el mismo volumen tanto en Windows como en
+    Linux/Mac: o queda el archivo viejo completo, o el nuevo completo,
+    nunca algo a medias.
+    """
     STORAGE_DIR.mkdir(parents=True, exist_ok=True)
-    LIMITES_PATH.write_text(
-        json.dumps(limites, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    tmp_path = LIMITES_PATH.with_suffix(".tmp")
+    tmp_path.write_text(json.dumps(limites, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp_path, LIMITES_PATH)
 
 
 def crear_limite_gasto(categoria: str, monto_limite: float) -> dict:

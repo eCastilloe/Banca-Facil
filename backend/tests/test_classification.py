@@ -107,6 +107,16 @@ def test_llm_que_lanza_excepcion_no_cachea_para_poder_reintentar_despues(cache_a
     assert len(llamadas) == 2
 
 
+def test_cache_corrupta_no_tumba_y_se_trata_como_vacia(cache_aislada):
+    classification.STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    classification.CACHE_PATH.write_text("{esto no es json valido", encoding="utf-8")
+
+    # No debe lanzar -- una caché corrupta solo significa volver a preguntar
+    # al LLM lo que ya se sabía, no tumbar la consulta.
+    resultado = classification.clasificar_conceptos(["WALMART"])
+    assert resultado["WALMART"] == "Despensa"
+
+
 def test_categorias_pasadas_al_llm_son_las_8_validas(cache_aislada):
     categorias_recibidas = {}
 
