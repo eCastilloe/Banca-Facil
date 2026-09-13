@@ -1,4 +1,4 @@
-# Control de Gasto por Categoría — HackMTY 2026, Track Banorte
+# Banca Fácil — HackMTY 2026, Track Banorte
 
 Un asistente financiero conversacional: la persona escribe en una sola caja
 de texto y un agente (LLM) decide **qué intención es** y **qué pantalla
