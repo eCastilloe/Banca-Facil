@@ -1,5 +1,5 @@
 import type { A2UIEnvelope } from '../types/a2ui';
-import { mockOverview, mockCategoryDetail, mockMessage } from './mockAgent';
+import { mockOverview, mockCategoryDetail, mockMessage, mockLimiteCreado } from './mockAgent';
 import { parseEnvelope } from './parseEnvelope';
 
 /**
@@ -62,6 +62,13 @@ export function sendAction(
       return mockCategoryDetail(conversationId, params.category_id);
     }
     if (actionId === 'back_to_overview') return mockOverview(conversationId);
+    if (
+      actionId === 'crear_limite_gasto'
+      && typeof params?.categoria === 'string'
+      && typeof params?.monto_limite === 'number'
+    ) {
+      return mockLimiteCreado(conversationId, params.categoria, params.monto_limite);
+    }
     throw new Error(`Acción no soportada por el mock: ${actionId}`);
   });
 }

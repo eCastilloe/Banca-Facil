@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseEnvelope } from '../src/lib/parseEnvelope.ts';
-import { mockOverview, mockMessage, mockCategoryDetail } from '../src/lib/mockAgent.ts';
+import {
+  mockOverview, mockMessage, mockCategoryDetail,
+  mockDiagnostico, mockProximosPagos, mockLimiteCreado,
+} from '../src/lib/mockAgent.ts';
 import { validProps } from '../src/components/a2ui/validation.ts';
 import { validTransactionProps } from '../src/lib/validateTransactions.ts';
 
@@ -38,6 +41,34 @@ test('invalid props cannot reach charts or transaction rendering', () => {
   assert.equal(validTransactionProps({ period: {}, transactions: [] }), false);
   const props = mockCategoryDetail('test', 'despensa').components[0].props;
   assert.equal(validTransactionProps({ ...props, transactions: [{ id: 'bad', amount: '100' }] }), false);
+});
+
+test('rejects suggested_prompts that are not a list of strings', () => {
+  const envelope = mockOverview('test');
+  for (const bad of ['pregunta suelta', ['ok', 42], ['ok', null], [{ text: 'ok' }]]) {
+    assert.throws(() => parseEnvelope({ ...envelope, suggested_prompts: bad }, 'test'));
+  }
+  assert.doesNotThrow(() => parseEnvelope({ ...envelope, suggested_prompts: ['¿Cómo voy?'] }, 'test'));
+  assert.doesNotThrow(() => parseEnvelope({ ...envelope, suggested_prompts: undefined }, 'test'));
+});
+
+test('diagnostico, proximos pagos y limite creado son envelopes validos con sus componentes nuevos', () => {
+  const diagnostico = parseEnvelope(JSON.stringify(mockDiagnostico('test')), 'test');
+  assert.deepEqual(diagnostico.components.map(c => c.type), ['text_block', 'risk_indicator', 'category_badge', 'progress']);
+
+  const pagos = parseEnvelope(JSON.stringify(mockProximosPagos('test')), 'test');
+  const lista = pagos.components.find(c => c.type === 'transaction_list');
+  assert.equal(validTransactionProps(lista.props), true);
+
+  const limite = parseEnvelope(JSON.stringify(mockLimiteCreado('test', 'Compras', 3200)), 'test');
+  assert.equal(limite.intent, 'limite_creado');
+  const progreso = limite.components.find(c => c.type === 'progress');
+  assert.equal(validProps('Progress', progreso.props), true);
+});
+
+test('mockMessage rutea "como voy" y "pagos" a sus propias intenciones, no al resumen', () => {
+  assert.equal(mockMessage('test', '¿cómo voy este mes?').intent, 'diagnostico_financiero');
+  assert.equal(mockMessage('test', '¿qué pagos tengo próximos?').intent, 'proximos_pagos');
 });
 
 test('both overview charts include inline transactions without remote category actions', () => {
