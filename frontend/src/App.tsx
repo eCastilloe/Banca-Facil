@@ -4,9 +4,11 @@ import { ComponentRenderer } from "./components/registry";
 import { BankChrome } from "./components/BankChrome";
 import { loadDefaultOverview, newConversationId, sendAction, sendMessage, usingMock } from "./lib/api";
 
-// Nombre del usuario demo — mismo que en los datos sintéticos de backend.
-// Cuando exista sesión real, esto viene del backend.
-const DEMO_USER_NAME = "Santiago";
+// Placeholder mientras no exista sesión real -- el backend no tiene ningún
+// concepto de usuario nombrado (los datos sintéticos no traen nombre), así
+// que este valor no debe leerse como un dato real. Cuando exista sesión de
+// verdad, esto viene del backend.
+const DEMO_USER_NAME = "Usuario";
 
 function greeting(): string {
   const hour = new Date().getHours();
