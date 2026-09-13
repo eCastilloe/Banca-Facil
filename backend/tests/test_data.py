@@ -87,3 +87,21 @@ def test_leer_limites_con_json_corrupto_no_tumba_y_regresa_vacio(limites_aislado
     data.LIMITES_PATH.write_text("{esto no es json valido", encoding="utf-8")
 
     assert data.obtener_limites_gasto() == []
+
+
+def test_eliminar_limite_gasto_quita_solo_la_categoria_pedida(limites_aislados):
+    data.crear_limite_gasto("Despensa", 3000.0)
+    data.crear_limite_gasto("Compras", 2000.0)
+
+    resultado = data.eliminar_limite_gasto("Despensa")
+
+    assert resultado == {"ok": True, "categoria": "Despensa", "existia": True}
+    limites = data.obtener_limites_gasto()
+    assert len(limites) == 1
+    assert limites[0]["categoria"] == "Compras"
+
+
+def test_eliminar_limite_gasto_categoria_sin_limite_no_es_error(limites_aislados):
+    resultado = data.eliminar_limite_gasto("Salud")
+    assert resultado == {"ok": True, "categoria": "Salud", "existia": False}
+    assert data.obtener_limites_gasto() == []

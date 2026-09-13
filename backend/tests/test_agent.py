@@ -165,3 +165,77 @@ def test_responder_accion_rechaza_monto_no_positivo():
             )
         )
     assert exc_info.value.status_code == 400
+
+
+def test_responder_accion_eliminar_limite_rechaza_si_falta_categoria():
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(agent._responder_accion("eliminar_limite_gasto", {}, "c1"))
+    assert exc_info.value.status_code == 400
+
+
+# --- _sugerencia_de_limite: no sugiere lo que ya existe ---------------------
+
+
+def _categoria(id_, total, percent):
+    return {"id": id_, "label": id_, "total": total, "percent": percent, "transactions": []}
+
+
+def test_sugerencia_de_limite_aparece_si_una_categoria_domina_y_no_tiene_limite():
+    categorias = [_categoria("compras", 4000.0, 50.0), _categoria("despensa", 4000.0, 50.0)]
+    boton = agent._sugerencia_de_limite(categorias, categorias_con_limite=set())
+    assert boton is not None
+    assert boton["props"]["params"]["categoria"] == "Compras"
+
+
+def test_sugerencia_de_limite_no_aparece_si_la_categoria_dominante_ya_tiene_limite():
+    categorias = [_categoria("compras", 4000.0, 50.0), _categoria("despensa", 4000.0, 50.0)]
+    boton = agent._sugerencia_de_limite(categorias, categorias_con_limite={"Compras"})
+    assert boton is None
+
+
+def test_sugerencia_de_limite_no_aparece_si_ninguna_categoria_domina():
+    categorias = [_categoria("compras", 100.0, 20.0), _categoria("despensa", 100.0, 20.0)]
+    boton = agent._sugerencia_de_limite(categorias, categorias_con_limite=set())
+    assert boton is None
+
+
+# --- Aviso proactivo de límite excedido (en gasto_por_categoria/overview) ---
+
+
+def test_limites_excedidos_detecta_solo_los_que_pasan_su_tope():
+    gasto = {"Compras": {"monto_total": 4000.0}, "Despensa": {"monto_total": 500.0}}
+    limites = [
+        {"categoria": "Compras", "monto_limite": 3000.0},
+        {"categoria": "Despensa", "monto_limite": 1000.0},
+    ]
+    excedidos = agent._limites_excedidos(gasto, limites)
+    assert [e["categoria"] for e in excedidos] == ["Compras"]
+    assert excedidos[0]["gastado"] == 4000.0
+
+
+def test_limites_excedidos_vacio_si_nada_se_paso():
+    gasto = {"Compras": {"monto_total": 100.0}}
+    limites = [{"categoria": "Compras", "monto_limite": 3000.0}]
+    assert agent._limites_excedidos(gasto, limites) == []
+
+
+def test_aviso_limite_excedido_none_si_no_hay_excedidos():
+    assert agent._aviso_limite_excedido([]) is None
+
+
+def test_aviso_limite_excedido_elige_el_mas_excedido():
+    excedidos = [
+        {"categoria": "Despensa", "monto_limite": 1000.0, "gastado": 1100.0},
+        {"categoria": "Compras", "monto_limite": 3000.0, "gastado": 4000.0},
+    ]
+    aviso = agent._aviso_limite_excedido(excedidos)
+    assert aviso["type"] == "risk_indicator"
+    assert aviso["props"]["level"] == "high"
+    assert "Compras" in aviso["props"]["description"]
+
+
+# --- El esquema de decisión de UI acepta la variante "table" ---------------
+
+
+def test_decision_ui_schema_incluye_table():
+    assert "table" in agent.DECISION_UI_SCHEMA.properties["variante"].enum
