@@ -14,9 +14,10 @@ se la pasa a `obtener_gasto_por_categoria`.
 """
 from __future__ import annotations
 
+import calendar
 import json
 import unicodedata
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Callable
 
@@ -190,3 +191,172 @@ def obtener_gasto_por_categoria(
         )
 
     return agregado
+
+
+# Umbrales del nivel de riesgo -- regla de negocio determinista, no decisión
+# del LLM: así es testeable y no cuesta tokens (ver CLAUDE.md, sección 11.2).
+VARIACION_ALTA_PCT = 25.0
+VARIACION_MEDIA_PCT = 10.0
+LIMITE_CERCA_PCT = 80.0
+
+
+def obtener_diagnostico_financiero(
+    fecha_inicio: date,
+    fecha_fin: date,
+    llm_classify_fn: LLMClassifyFn | None = None,
+) -> dict:
+    """Contrato en CLAUDE.md, sección 11.2.
+
+    Compara el periodo pedido contra el periodo inmediato anterior de la
+    misma duración, evalúa los límites guardados contra el gasto actual, y
+    calcula un nivel de riesgo determinista.
+    """
+    actual = obtener_gasto_por_categoria(fecha_inicio, fecha_fin, llm_classify_fn)
+    total_actual = round(sum(d["monto_total"] for d in actual.values()), 2)
+
+    duracion = (fecha_fin - fecha_inicio).days + 1
+    fin_anterior = fecha_inicio - timedelta(days=1)
+    inicio_anterior = fin_anterior - timedelta(days=duracion - 1)
+    anterior = obtener_gasto_por_categoria(inicio_anterior, fin_anterior, llm_classify_fn)
+    total_anterior = round(sum(d["monto_total"] for d in anterior.values()), 2)
+
+    if total_anterior > 0:
+        variacion_pct = round((total_actual - total_anterior) / total_anterior * 100, 1)
+    else:
+        variacion_pct = 100.0 if total_actual > 0 else 0.0
+
+    categoria_mayor_gasto = None
+    if actual:
+        nombre, datos = max(actual.items(), key=lambda kv: kv[1]["monto_total"])
+        porcentaje = round(datos["monto_total"] / total_actual * 100, 1) if total_actual else 0.0
+        categoria_mayor_gasto = {
+            "categoria": nombre,
+            "monto_total": datos["monto_total"],
+            "porcentaje": porcentaje,
+        }
+
+    limites = []
+    for limite in data.obtener_limites_gasto():
+        categoria = limite["categoria"]
+        monto_limite = limite["monto_limite"]
+        gastado = actual.get(categoria, {}).get("monto_total", 0.0)
+        porcentaje_usado = round(gastado / monto_limite * 100, 1) if monto_limite else 0.0
+        limites.append(
+            {
+                "categoria": categoria,
+                "monto_limite": monto_limite,
+                "gastado": gastado,
+                "porcentaje_usado": porcentaje_usado,
+                "excedido": gastado > monto_limite,
+            }
+        )
+
+    algun_limite_excedido = any(l["excedido"] for l in limites)
+    algun_limite_cerca = any(l["porcentaje_usado"] >= LIMITE_CERCA_PCT for l in limites)
+
+    if algun_limite_excedido or variacion_pct > VARIACION_ALTA_PCT:
+        nivel_riesgo = "high"
+    elif algun_limite_cerca or variacion_pct > VARIACION_MEDIA_PCT:
+        nivel_riesgo = "medium"
+    else:
+        nivel_riesgo = "low"
+
+    return {
+        "periodo": {"inicio": fecha_inicio.isoformat(), "fin": fecha_fin.isoformat()},
+        "total_gastado": total_actual,
+        "periodo_anterior": {
+            "inicio": inicio_anterior.isoformat(),
+            "fin": fin_anterior.isoformat(),
+            "total_gastado": total_anterior,
+        },
+        "variacion_pct": variacion_pct,
+        "categoria_mayor_gasto": categoria_mayor_gasto,
+        "limites": limites,
+        "nivel_riesgo": nivel_riesgo,
+    }
+
+
+# "Monto parecido" para considerar un cargo recurrente: el rango entre el
+# monto más alto y el más bajo no puede superar este porcentaje del
+# promedio. Filtra compras variables (Despensa, Compras) que por azar caen
+# en 2-3 meses distintos, sin excluir servicios reales (CFE/TELMEX varían
+# de un mes a otro, pero no tanto como una compra discrecional).
+DISPERSION_MAXIMA = 0.8
+MESES_HISTORIAL_PAGOS = 3
+
+
+def _sumar_un_mes(fecha: date) -> date:
+    """Mismo día del mes siguiente, recortado si ese mes es más corto."""
+    if fecha.month == 12:
+        anio, mes = fecha.year + 1, 1
+    else:
+        anio, mes = fecha.year, fecha.month + 1
+    ultimo_dia_del_mes = calendar.monthrange(anio, mes)[1]
+    return date(anio, mes, min(fecha.day, ultimo_dia_del_mes))
+
+
+def obtener_proximos_pagos(llm_classify_fn: LLMClassifyFn | None = None) -> dict:
+    """Contrato en CLAUDE.md, sección 11.2.
+
+    Detecta cargos recurrentes en los últimos 3 meses (mismo comercio en al
+    menos 2 meses distintos, con montos parecidos) y proyecta la próxima
+    fecha y monto. Sale de las transacciones que ya existen -- no inventa un
+    dominio de datos nuevo ni persiste nada.
+    """
+    hoy = date.today()
+    inicio = hoy - timedelta(days=30 * MESES_HISTORIAL_PAGOS)
+    transacciones = [
+        t for t in data.obtener_transacciones(inicio, hoy) if t.tipo_movimiento not in TIPOS_NO_GASTO
+    ]
+
+    por_comercio: dict[str, list] = {}
+    for t in transacciones:
+        por_comercio.setdefault(t.comercio, []).append(t)
+
+    candidatos = []
+    for comercio, movimientos in por_comercio.items():
+        meses_distintos = {(t.fecha.year, t.fecha.month) for t in movimientos}
+        if len(meses_distintos) < 2:
+            continue
+
+        montos = [t.monto for t in movimientos]
+        promedio = sum(montos) / len(montos)
+        dispersion = (max(montos) - min(montos)) / promedio if promedio else 0.0
+        if dispersion > DISPERSION_MAXIMA:
+            continue
+
+        ultima = max(movimientos, key=lambda t: t.fecha)
+        proxima_fecha = _sumar_un_mes(ultima.fecha)
+        if proxima_fecha < hoy:
+            # El comercio no volvió a aparecer en el mes más reciente: la
+            # recurrencia probablemente se cortó, o solo nos falta ver el
+            # cargo más nuevo. De cualquier forma, una fecha "próxima" que
+            # ya pasó no es un próximo pago -- mejor omitirlo que confundir.
+            continue
+        candidatos.append(
+            {
+                "comercio": comercio,
+                "ultima_fecha": ultima.fecha,
+                "proxima_fecha": proxima_fecha,
+                "monto_estimado": round(promedio, 2),
+                "ocurrencias": len(movimientos),
+            }
+        )
+
+    conceptos_unicos = sorted({c["comercio"] for c in candidatos})
+    categoria_por_concepto = clasificar_conceptos(conceptos_unicos, llm_classify_fn)
+
+    pagos = [
+        {
+            "comercio": c["comercio"],
+            "categoria": categoria_por_concepto[c["comercio"]],
+            "monto_estimado": c["monto_estimado"],
+            "fecha_estimada": c["proxima_fecha"].isoformat(),
+            "ultima_fecha": c["ultima_fecha"].isoformat(),
+            "ocurrencias": c["ocurrencias"],
+        }
+        for c in candidatos
+    ]
+    pagos.sort(key=lambda p: p["fecha_estimada"])
+
+    return {"pagos": pagos, "total_estimado": round(sum(p["monto_estimado"] for p in pagos), 2)}

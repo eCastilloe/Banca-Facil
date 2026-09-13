@@ -424,19 +424,162 @@ async def _handler_gasto_por_categoria(
     )
 
 
-async def _handler_pendiente(conversation_id: str, intent: str, que_falta: str) -> dict:
-    """Intención ya ruteable pero cuya tool MCP todavía no existe.
+def _etiqueta_categoria(categoria_es: str) -> str:
+    return CATEGORIA_INFO.get(categoria_es, {"label": categoria_es})["label"]
 
-    Se responde honestamente en vez de fingir datos. Cuando la tool del
-    Bloque 1 aterrice, este handler se reemplaza por el real (ver CLAUDE.md,
-    sección 11.2).
-    """
-    return _envelope(
-        conversation_id,
-        intent,
-        [_texto("pendiente", que_falta, "Mientras tanto, puedo ayudarte con lo de abajo.")],
-        SUGERENCIAS.get(intent, SUGERENCIAS["fuera_de_alcance"]),
+
+def _titulo_diagnostico(diag: dict) -> str:
+    """Título del insight -- compuesto en Python, sin gastar otra llamada a Gemini."""
+    variacion = diag["variacion_pct"]
+    total = diag["total_gastado"]
+    if variacion > 0:
+        return f"Llevas ${total:,.0f} gastados, {variacion:.0f}% más que el periodo anterior."
+    if variacion < 0:
+        return f"Llevas ${total:,.0f} gastados, {abs(variacion):.0f}% menos que el periodo anterior."
+    return f"Llevas ${total:,.0f} gastados, igual que el periodo anterior."
+
+
+def _mensaje_riesgo(diag: dict) -> tuple[str, str]:
+    """(label, description) del risk_indicator -- prioriza la causa más concreta."""
+    limite_excedido = next((l for l in diag["limites"] if l["excedido"]), None)
+    if limite_excedido:
+        etiqueta = _etiqueta_categoria(limite_excedido["categoria"])
+        return (
+            "Superaste un límite que creaste",
+            f"{etiqueta} lleva ${limite_excedido['gastado']:,.0f}, por encima de tu límite "
+            f"de ${limite_excedido['monto_limite']:,.0f}.",
+        )
+
+    limite_cerca = next((l for l in diag["limites"] if l["porcentaje_usado"] >= 80), None)
+    if limite_cerca:
+        etiqueta = _etiqueta_categoria(limite_cerca["categoria"])
+        return (
+            "Te estás acercando a un límite",
+            f"Llevas {limite_cerca['porcentaje_usado']:.0f}% del límite de {etiqueta}.",
+        )
+
+    if diag["variacion_pct"] > 10:
+        return ("Tu gasto va en aumento", f"Vas {diag['variacion_pct']:.0f}% arriba del periodo anterior.")
+
+    return ("Vas bien este periodo", "Tu gasto se mantiene bajo control.")
+
+
+def _badge_mayor_gasto(diag: dict) -> dict | None:
+    mayor = diag["categoria_mayor_gasto"]
+    if not mayor:
+        return None
+    info = CATEGORIA_INFO.get(mayor["categoria"], {"id": "otros", "label": mayor["categoria"]})
+    return {
+        "id": "mayor_gasto",
+        "type": "category_badge",
+        "props": {"category": info["id"], "label": f"Mayor gasto: {info['label']}"},
+    }
+
+
+def _progreso_diagnostico(diag: dict) -> dict | None:
+    """progress contra el límite de la categoría de mayor gasto si existe,
+    o contra el periodo anterior como referencia si no hay límite guardado."""
+    mayor = diag["categoria_mayor_gasto"]
+    if mayor:
+        limite = next((l for l in diag["limites"] if l["categoria"] == mayor["categoria"]), None)
+        if limite:
+            return {
+                "id": "limite_progreso",
+                "type": "progress",
+                "props": {
+                    "label": f"{_etiqueta_categoria(mayor['categoria'])} vs tu límite",
+                    "value": limite["gastado"],
+                    "max": limite["monto_limite"],
+                },
+            }
+
+    anterior_total = diag["periodo_anterior"]["total_gastado"]
+    if anterior_total > 0:
+        return {
+            "id": "comparativo_progreso",
+            "type": "progress",
+            "props": {
+                "label": "Gasto vs el periodo anterior",
+                "value": diag["total_gastado"],
+                "max": anterior_total,
+            },
+        }
+    return None
+
+
+async def _handler_diagnostico_financiero(
+    conversation_id: str, solicitado_inicio: date, solicitado_fin: date
+) -> dict:
+    fecha_inicio, fecha_fin, _ = _aplicar_tope(solicitado_inicio, solicitado_fin)
+    diag = await _llamar_tool_mcp(
+        "obtener_diagnostico_financiero",
+        {"fecha_inicio": fecha_inicio.isoformat(), "fecha_fin": fecha_fin.isoformat()},
     )
+
+    label, descripcion = _mensaje_riesgo(diag)
+    componentes = [
+        _texto("diagnostico", _titulo_diagnostico(diag)),
+        {
+            "id": "riesgo",
+            "type": "risk_indicator",
+            "props": {"level": diag["nivel_riesgo"], "label": label, "description": descripcion},
+        },
+    ]
+
+    badge = _badge_mayor_gasto(diag)
+    if badge:
+        componentes.append(badge)
+
+    progreso = _progreso_diagnostico(diag)
+    if progreso:
+        componentes.append(progreso)
+
+    return _envelope(
+        conversation_id, "diagnostico_financiero", componentes, SUGERENCIAS["diagnostico_financiero"]
+    )
+
+
+async def _handler_proximos_pagos(conversation_id: str) -> dict:
+    resultado = await _llamar_tool_mcp("obtener_proximos_pagos", {})
+    pagos = resultado["pagos"]
+
+    if not pagos:
+        return _envelope(
+            conversation_id,
+            "proximos_pagos",
+            [_texto("insight", "No detecté cargos recurrentes en tus últimos 3 meses.")],
+            SUGERENCIAS["proximos_pagos"],
+        )
+
+    hoy = date.today()
+    transactions = [
+        {
+            "id": f"p{i}",
+            "date": p["fecha_estimada"],
+            "description": p["comercio"],
+            "amount": -p["monto_estimado"],
+        }
+        for i, p in enumerate(pagos, start=1)
+    ]
+
+    plural = "s" if len(pagos) != 1 else ""
+    componentes = [
+        _texto("insight", f"Tienes {len(pagos)} cargo{plural} recurrente{plural} detectado{plural}."),
+        {
+            "id": "pagos",
+            "type": "transaction_list",
+            "props": {
+                "period": {
+                    "start": hoy.isoformat(),
+                    "end": (hoy + timedelta(days=30)).isoformat(),
+                    "label": "Próximos 30 días (estimado)",
+                },
+                "total": resultado["total_estimado"],
+                "transactions": transactions,
+            },
+        },
+    ]
+    return _envelope(conversation_id, "proximos_pagos", componentes, SUGERENCIAS["proximos_pagos"])
 
 
 def _handler_fuera_de_alcance(conversation_id: str) -> dict:
@@ -485,18 +628,11 @@ async def _responder_consulta(mensaje_usuario: str | None, conversation_id: str)
         return await _handler_gasto_por_categoria(conversation_id, inicio, fin)
 
     if intencion == "diagnostico_financiero":
-        return await _handler_pendiente(
-            conversation_id,
-            "diagnostico_financiero",
-            "El diagnóstico de tus hábitos todavía no está listo.",
-        )
+        inicio, fin = _periodo_del_router(router)
+        return await _handler_diagnostico_financiero(conversation_id, inicio, fin)
 
     if intencion == "proximos_pagos":
-        return await _handler_pendiente(
-            conversation_id,
-            "proximos_pagos",
-            "La proyección de tus próximos pagos todavía no está lista.",
-        )
+        return await _handler_proximos_pagos(conversation_id)
 
     return _handler_fuera_de_alcance(conversation_id)
 
