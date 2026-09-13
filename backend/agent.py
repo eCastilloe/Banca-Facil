@@ -91,9 +91,15 @@ app = FastAPI(title="Control de Gasto por Categoría")
 # navegador bloquea el fetch aunque el backend responda bien. "*" es
 # deliberado para la demo (sin datos sensibles reales, todo sintético);
 # para algo más allá del hackathon, restringir vía CORS_ORIGINS.
+#
+# `or "*"` y no `.get(..., "*")`: si CORS_ORIGINS está definida pero vacía
+# (ej. una plantilla de .env sin comentar), .get() regresa "" en vez del
+# default -- "".split(",") da [''], que no matchea ningún origen real, y
+# CORS bloquea absolutamente todo sin ningún error obvio del lado del
+# servidor (el navegador solo dice "no se pudo conectar").
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.environ.get("CORS_ORIGINS", "*").split(","),
+    allow_origins=(os.environ.get("CORS_ORIGINS") or "*").split(","),
     allow_methods=["POST"],
     allow_headers=["Content-Type"],
 )
