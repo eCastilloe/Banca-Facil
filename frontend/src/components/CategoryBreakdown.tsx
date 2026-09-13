@@ -14,7 +14,7 @@ const RING_RADIUS = 76;
 const RING_STROKE = 26;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
-type Mode = "donut" | "bars";
+type Mode = "donut" | "bars" | "table";
 
 /**
  * Motor compartido de pie_chart y bar_chart: mismos datos, dos formas de
@@ -159,6 +159,42 @@ export function CategoryBreakdown({ component, mode }: RendererProps & { mode: M
               );
             })}
           </ul>
+        </div>
+      ) : mode === "table" ? (
+        <div className="breakdown-body breakdown-body--table">
+          <div className="breakdown-total">Total: {formatMXN(animatedTotal)}</div>
+          <table className="cat-table">
+            <thead>
+              <tr>
+                <th>Categoría</th>
+                <th>Monto</th>
+                <th>%</th>
+                <th>Movimientos</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => {
+                const { color, bg } = iconFor(c.id);
+                return (
+                  <tr key={c.id} className="cat-table-row" onClick={() => handleRowClick(c.id)} onKeyDown={(event) => handleRowKeyDown(event, c.id)} role="button" tabIndex={0}>
+                    <td className="cat-table-label">
+                      <span className="chip-icon" style={{ color, background: bg }}>
+                        {c.id === MORE_ID ? (
+                          <span className="chip-icon-dots">+{hidden.length}</span>
+                        ) : (
+                          <CategoryIcon categoryId={c.id} className="chip-icon-svg" />
+                        )}
+                      </span>
+                      {c.label}
+                    </td>
+                    <td className="cat-table-amount">{formatMXN(c.total)}</td>
+                    <td className="cat-table-percent">{c.percent.toFixed(1)}%</td>
+                    <td className="cat-table-count">{c.id === MORE_ID ? "—" : c.transactions.length}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
         <div className="breakdown-body breakdown-body--bars">

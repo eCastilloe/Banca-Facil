@@ -1,5 +1,6 @@
 export { PieChart } from './PieChart';
 export { BarChart } from './BarChart';
+export { Table } from './Table';
 export { Progress } from './Progress';
 export { CategoryBadge } from './CategoryBadge';
 export { ActionButton } from './ActionButton';

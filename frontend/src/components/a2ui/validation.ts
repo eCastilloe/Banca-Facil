@@ -12,6 +12,7 @@ export function validProps<K extends keyof ComponentPropsMap>(name: K, p: unknow
   switch (name) {
     case 'PieChart':
     case 'BarChart':
+    case 'Table':
       return object(p.period) && text(p.period.start) && text(p.period.end) && optionalText(p.period.label)
         && (p.period.was_clamped === undefined || typeof p.period.was_clamped === 'boolean')
         && finite(p.total_spent) && p.total_spent >= 0 && Array.isArray(p.categories)

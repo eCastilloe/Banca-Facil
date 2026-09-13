@@ -15,15 +15,22 @@ Flujo de una pregunta:
 2. El handler de esa intención llama su tool MCP. El agente nunca clasifica
    ni agrega transacciones: esa lógica vive entera en el servidor MCP
    (contrato en español, interno).
-3. Gemini decide la presentación (pie_chart / bar_chart y un texto breve)
-   usando solo los totales por categoría, no la lista de transacciones.
+3. Gemini decide la presentación (pie_chart / bar_chart / table y un texto
+   breve) usando solo los totales por categoría, no la lista de
+   transacciones. La variante se decide con umbrales numéricos explícitos
+   en el prompt, no a "juicio libre" del modelo -- ver `_decidir_ui`.
 4. Python traduce el resultado al envelope A2UI en inglés que el frontend
-   espera, con las transacciones anidadas por categoría.
+   espera, con las transacciones anidadas por categoría. También cruza el
+   gasto contra los límites guardados (tool `obtener_limites_gasto`, sin
+   costo de Gemini) y antepone un aviso si alguno ya se excedió -- así se
+   ve en cuanto se abre la app, no solo si se pregunta "¿cómo voy?".
 
 **El ciclo se cierra en `event:"action"`** (regla 3 del reto): el agente
 ejecuta la acción vía MCP y responde con una PANTALLA NUEVA, no con un
-`{ok:true}`. Hoy la acción soportada es `crear_limite_gasto`, que el propio
-agente ofrece con un `action_button` cuando una categoría domina el gasto.
+`{ok:true}`. Dos acciones soportadas: `crear_limite_gasto` (el propio
+agente la ofrece con un `action_button` cuando una categoría domina el
+gasto) y `eliminar_limite_gasto` (ofrecida junto al progreso del
+diagnóstico) -- crear/ajustar/quitar un límite es el mismo ciclo completo.
 
 Decisión de equipo (2026-09-12): el drill-down de categoría es 100% local
 en el frontend -- por eso cada categoría ya trae su `transactions` completa
@@ -345,7 +352,7 @@ def _aplicar_tope(solicitado_inicio: date, solicitado_fin: date) -> tuple[date, 
 DECISION_UI_SCHEMA = types.Schema(
     type=types.Type.OBJECT,
     properties={
-        "variante": types.Schema(type=types.Type.STRING, enum=["pie_chart", "bar_chart"]),
+        "variante": types.Schema(type=types.Type.STRING, enum=["pie_chart", "bar_chart", "table"]),
         "mensaje": types.Schema(type=types.Type.STRING),
     },
     required=["variante", "mensaje"],
@@ -354,6 +361,14 @@ DECISION_UI_SCHEMA = types.Schema(
 
 async def _decidir_ui(categorias: list[dict], mensaje_usuario: str | None = None) -> dict:
     resumen = [{"label": c["label"], "total": c["total"], "percent": c["percent"]} for c in categorias]
+    # Criterio con umbrales numéricos explícitos -- no "a juicio del modelo".
+    # Se encontró probando en vivo que casi cualquier periodo de este dataset
+    # sintético tiene una categoría que se lleva 25-55% del gasto (Amazon y
+    # Liverpool, los dos comercios de Compras, tienen un rango de montos
+    # mucho más ancho que el resto), así que un criterio vago ("si dominan
+    # claramente") caía en pie_chart casi siempre, sin importar el dato.
+    # Con un número fijo, la decisión es verificable y el resultado varía de
+    # verdad según el periodo que se pregunte.
     prompt = f"""Este es el desglose de gasto por categoría del periodo consultado:
 
 {json.dumps(resumen, ensure_ascii=False)}
@@ -362,12 +377,18 @@ Pregunta del usuario: {json.dumps(mensaje_usuario, ensure_ascii=False)}
 Responde a esa pregunta con los datos disponibles. No inventes saldo ni ingresos.
 El gasto anterior no es un presupuesto.
 
-Decide:
-- "variante": "pie_chart" si 1-2 categorías dominan claramente el gasto,
-  "bar_chart" si los montos están más parejos.
-- "mensaje": un resumen en español de máximo 2 frases y 45 palabras. Responde
-  directamente a la pregunta y destaca una cifra útil. Sin saludos, introducciones
-  ni explicaciones largas. Si falta un dato imprescindible, haz una pregunta corta."""
+Decide la variante aplicando estas reglas EN ORDEN (la primera que aplique gana):
+
+1. "pie_chart" si la categoría con más gasto se lleva 45% o más del total,
+   o si dobla (2x) el monto de la segunda categoría con más gasto.
+2. "table" si hay 4 o más categorías con gasto Y ninguna le saca más de 15
+   puntos porcentuales a la siguiente (montos parejos y numerosos, donde
+   una gráfica no deja comparar con precisión).
+3. "bar_chart" en cualquier otro caso.
+
+"mensaje": un resumen en español de máximo 2 frases y 45 palabras. Responde
+directamente a la pregunta y destaca una cifra útil. Sin saludos, introducciones
+ni explicaciones largas. Si falta un dato imprescindible, haz una pregunta corta."""
 
     try:
         return await _generar_json(prompt, DECISION_UI_SCHEMA)
@@ -493,6 +514,7 @@ SUGERENCIAS = {
         "¿Qué pagos tengo próximos?",
     ],
     "limite_creado": ["¿Cómo voy este mes?", "¿En qué gasté más?"],
+    "limite_eliminado": ["¿Cómo voy este mes?", "¿En qué gasté más?"],
 }
 
 # Una categoría "domina" si se lleva al menos esto del total. Regla
@@ -502,12 +524,25 @@ UMBRAL_DOMINANCIA = 30.0
 RECORTE_SUGERIDO = 0.20  # el límite que sugerimos es 20% menos del gasto actual
 
 
-def _sugerencia_de_limite(categorias: list[dict]) -> dict | None:
-    """Arma el action_button de 'crear límite' si una categoría domina el gasto."""
+def _sugerencia_de_limite(categorias: list[dict], categorias_con_limite: set[str]) -> dict | None:
+    """Arma el action_button de 'crear límite' si una categoría domina el gasto.
+
+    No sugiere un límite nuevo para una categoría que YA tiene uno guardado
+    (`categorias_con_limite`, nombres internos en español) -- decirle "crea
+    un límite" a alguien que ya lo tiene es contradictorio, y para esos
+    casos ya existe el aviso de `_aviso_limite_excedido` más abajo.
+    """
     if not categorias:
         return None
     mayor = max(categorias, key=lambda c: c["total"])
     if mayor["percent"] < UMBRAL_DOMINANCIA:
+        return None
+
+    categoria_interna = next(
+        (nombre for nombre, info in CATEGORIA_INFO.items() if info["id"] == mayor["id"]),
+        mayor["label"],
+    )
+    if categoria_interna in categorias_con_limite:
         return None
 
     # Redondeado a 50 para que el monto se lea como algo que una persona
@@ -516,10 +551,6 @@ def _sugerencia_de_limite(categorias: list[dict]) -> dict | None:
     if sugerido <= 0:
         return None
 
-    categoria_interna = next(
-        (nombre for nombre, info in CATEGORIA_INFO.items() if info["id"] == mayor["id"]),
-        mayor["label"],
-    )
     return {
         "id": "sugerencia_limite",
         "type": "action_button",
@@ -528,6 +559,46 @@ def _sugerencia_de_limite(categorias: list[dict]) -> dict | None:
             "action": "crear_limite_gasto",
             "params": {"categoria": categoria_interna, "monto_limite": float(sugerido)},
             "variant": "primary",
+        },
+    }
+
+
+def _limites_excedidos(gasto_por_categoria: dict[str, dict], limites: list[dict]) -> list[dict]:
+    """Límites guardados cuyo gasto actual ya los supera.
+
+    Cruza los límites contra el desglose que `_handler_gasto_por_categoria`
+    YA tiene calculado -- no vuelve a agregar nada, solo compara. Esto es lo
+    que hace que el aviso aparezca en cuanto el usuario abre la app o
+    pregunta por su gasto, no solo cuando pregunta "¿cómo voy?" con esas
+    palabras exactas (antes, un límite excedido era invisible a menos que
+    se preguntara por el diagnóstico específicamente).
+    """
+    excedidos = []
+    for limite in limites:
+        gastado = gasto_por_categoria.get(limite["categoria"], {}).get("monto_total", 0.0)
+        if gastado > limite["monto_limite"]:
+            excedidos.append({**limite, "gastado": gastado})
+    return excedidos
+
+
+def _aviso_limite_excedido(excedidos: list[dict]) -> dict | None:
+    """risk_indicator con el límite más excedido (mayor diferencia sobre el
+    tope), si algo se pasó. Va como PRIMER componente de la respuesta --
+    es lo más importante que hay que decirle al usuario en ese momento."""
+    if not excedidos:
+        return None
+    peor = max(excedidos, key=lambda l: l["gastado"] - l["monto_limite"])
+    etiqueta = _etiqueta_categoria(peor["categoria"])
+    return {
+        "id": "aviso_limite",
+        "type": "risk_indicator",
+        "props": {
+            "level": "high",
+            "label": "Superaste un límite que creaste",
+            "description": (
+                f"{etiqueta} lleva ${peor['gastado']:,.0f}, por encima de tu límite "
+                f"de ${peor['monto_limite']:,.0f}."
+            ),
         },
     }
 
@@ -555,7 +626,18 @@ async def _handler_gasto_por_categoria(
     categorias = _traducir_categorias(gasto_por_categoria, total_spent)
     decision = await _decidir_ui(categorias, mensaje_usuario)
 
-    componentes = [
+    # Cruce contra límites guardados -- una tool nueva y barata (lee un JSON
+    # de disco, no agrega nada), sin llamada extra a Gemini. Así, un límite
+    # excedido se ve en cuanto se abre la app o se pregunta por el gasto, no
+    # solo si se pregunta "¿cómo voy?" con esas palabras exactas.
+    limites = (await _llamar_tool_mcp("obtener_limites_gasto", {}))["limites"]
+    categorias_con_limite = {l["categoria"] for l in limites}
+    aviso = _aviso_limite_excedido(_limites_excedidos(gasto_por_categoria, limites))
+
+    componentes = []
+    if aviso:
+        componentes.append(aviso)
+    componentes += [
         _texto("insight", decision["mensaje"]),
         {
             "id": "spending_overview",
@@ -574,7 +656,7 @@ async def _handler_gasto_por_categoria(
         },
     ]
 
-    boton = _sugerencia_de_limite(categorias)
+    boton = _sugerencia_de_limite(categorias, categorias_con_limite)
     if boton:
         componentes.append(boton)
 
@@ -671,6 +753,35 @@ def _progreso_diagnostico(diag: dict) -> dict | None:
     return None
 
 
+def _boton_quitar_limite(diag: dict) -> dict | None:
+    """action_button para borrar el límite de la categoría de mayor gasto,
+    si existe uno guardado.
+
+    Cierra el ciclo crear/ajustar/quitar en la misma pantalla donde el
+    usuario ve el efecto de ese límite -- crear uno ya existía
+    (`_sugerencia_de_limite`), editarlo ya funcionaba gratis (crear de
+    nuevo reemplaza el existente), y esto agrega la única pieza que
+    faltaba: quitarlo por completo.
+    """
+    mayor = diag["categoria_mayor_gasto"]
+    if not mayor:
+        return None
+    limite = next((l for l in diag["limites"] if l["categoria"] == mayor["categoria"]), None)
+    if not limite:
+        return None
+    etiqueta = _etiqueta_categoria(mayor["categoria"])
+    return {
+        "id": "quitar_limite",
+        "type": "action_button",
+        "props": {
+            "label": f"Quitar límite de {etiqueta}",
+            "action": "eliminar_limite_gasto",
+            "params": {"categoria": mayor["categoria"]},
+            "variant": "secondary",
+        },
+    }
+
+
 async def _handler_diagnostico_financiero(
     conversation_id: str, solicitado_inicio: date, solicitado_fin: date,
     mensaje_usuario: str | None = None, evaluar_compra: bool = False
@@ -705,6 +816,10 @@ async def _handler_diagnostico_financiero(
     progreso = _progreso_diagnostico(diag)
     if progreso:
         componentes.append(progreso)
+
+    boton_quitar = _boton_quitar_limite(diag)
+    if boton_quitar:
+        componentes.append(boton_quitar)
 
     return _envelope(
         conversation_id, "diagnostico_financiero", componentes, SUGERENCIAS["diagnostico_financiero"]
@@ -838,11 +953,18 @@ async def _responder_accion(action_id: str, params: dict[str, Any], conversation
     """Ejecuta la acción y responde con una PANTALLA NUEVA, no con un {ok:true}.
 
     Eso es lo que cumple la regla 3 del reto: la interacción con la UI
-    generada vuelve al agente y produce una interfaz nueva.
+    generada vuelve al agente y produce una interfaz nueva. Dos acciones
+    soportadas hoy: crear un límite y quitarlo -- ambas modifican estado
+    real vía MCP, ninguna gasta una llamada a Gemini.
     """
-    if action_id != "crear_limite_gasto":
-        raise HTTPException(status_code=400, detail=f"Acción no soportada: {action_id}")
+    if action_id == "crear_limite_gasto":
+        return await _accion_crear_limite(params, conversation_id)
+    if action_id == "eliminar_limite_gasto":
+        return await _accion_eliminar_limite(params, conversation_id)
+    raise HTTPException(status_code=400, detail=f"Acción no soportada: {action_id}")
 
+
+async def _accion_crear_limite(params: dict[str, Any], conversation_id: str) -> dict:
     categoria = params.get("categoria")
     monto_limite_crudo = params.get("monto_limite")
     if not categoria or monto_limite_crudo is None:
@@ -888,6 +1010,30 @@ async def _responder_accion(action_id: str, params: dict[str, Any], conversation
             },
         ],
         SUGERENCIAS["limite_creado"],
+    )
+
+
+async def _accion_eliminar_limite(params: dict[str, Any], conversation_id: str) -> dict:
+    categoria = params.get("categoria")
+    if not categoria:
+        raise HTTPException(status_code=400, detail="Falta 'categoria'")
+
+    resultado = await _llamar_tool_mcp("eliminar_limite_gasto", {"categoria": categoria})
+    etiqueta = CATEGORIA_INFO.get(categoria, {}).get("label", categoria)
+
+    if not resultado.get("existia"):
+        # No había límite que quitar -- no es un error del usuario (pudo
+        # haberlo quitado ya antes, o el botón venía de una pantalla vieja),
+        # así que se confirma con el mismo tono en vez de un error.
+        mensaje = f"{etiqueta} ya no tenía ningún límite guardado."
+    else:
+        mensaje = f"Listo, quité el límite de {etiqueta}."
+
+    return _envelope(
+        conversation_id,
+        "limite_eliminado",
+        [_texto("confirmacion", mensaje)],
+        SUGERENCIAS["limite_eliminado"],
     )
 
 

@@ -66,6 +66,21 @@ test('diagnostico, proximos pagos y limite creado son envelopes validos con sus 
   assert.equal(validProps('Progress', progreso.props), true);
 });
 
+test('el agente puede elegir "table" como tercera variante de gasto_por_categoria', () => {
+  // Misma forma de props que pie_chart/bar_chart (el agente solo cambia el
+  // `type`, ver agent.py _decidir_ui) -- se reusa el overview y se cambia
+  // el tipo del componente de gráfica para probar que el catálogo lo acepta.
+  const overview = mockOverview('test');
+  const overviewConTabla = {
+    ...overview,
+    components: overview.components.map(c => c.id === 'spending_overview' ? { ...c, type: 'table' } : c),
+  };
+  const result = parseEnvelope(JSON.stringify(overviewConTabla), 'test');
+  const tabla = result.components.find(c => c.type === 'table');
+  assert.ok(tabla);
+  assert.equal(validProps('Table', tabla.props), true);
+});
+
 test('mockMessage rutea "como voy" y "pagos" a sus propias intenciones, no al resumen', () => {
   assert.equal(mockMessage('test', '¿cómo voy este mes?').intent, 'diagnostico_financiero');
   assert.equal(mockMessage('test', '¿qué pagos tengo próximos?').intent, 'proximos_pagos');
