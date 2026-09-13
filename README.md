@@ -24,18 +24,33 @@ Cuatro intenciones, cada una con su propia pantalla (ver
 
 | Intención | Pregunta de ejemplo | Componentes que arma |
 |---|---|---|
-| `gasto_por_categoria` | "¿en qué gasté de más este mes?" | `text_block` + `pie_chart`/`bar_chart` + `action_button` (sugerencia de límite) |
-| `diagnostico_financiero` | "¿cómo voy este mes?" | `text_block` + `risk_indicator` + `category_badge` + `progress` |
+| `gasto_por_categoria` | "¿en qué gasté de más este mes?" | `text_block` + `pie_chart`/`bar_chart`/`table` + `action_button` (sugerencia de límite) |
+| `diagnostico_financiero` | "¿cómo voy este mes?" | `text_block` + `risk_indicator` + `category_badge` + `progress` + `action_button` (quitar límite, si existe) |
 | `proximos_pagos` | "¿qué pagos tengo próximos?" | `text_block` + `transaction_list` (cargos recurrentes proyectados) |
 | `fuera_de_alcance` | "cuéntame un chiste" | `text_block` + `suggested_prompts` |
 
-Y el flujo de acción que cierra el ciclo (regla 3 del reto): el usuario
-pulsa "Crear límite de $X en Categoría" → el agente ejecuta
-`crear_limite_gasto` vía MCP (modifica estado guardado de verdad) → responde
-con una pantalla nueva confirmando el límite, ya medido contra el gasto real.
+La variante de `gasto_por_categoria` la decide Gemini con un criterio
+numérico explícito (no "a juicio libre" del modelo): pastel si una
+categoría domina (≥45% del total, o dobla a la segunda), tabla si hay 4+
+categorías parejas entre sí (ninguna le saca más de 15 puntos a la
+siguiente — ahí ni pastel ni barras dejan comparar montos con precisión),
+barras en cualquier otro caso.
 
-Las cuatro intenciones y la acción están conectadas de punta a punta contra
-el Bloque 1 real (sin mocks) y probadas con Gemini real.
+Además, si el gasto de una categoría ya supera un límite guardado, la
+respuesta lo antepone como aviso (`risk_indicator`) desde la primera
+pantalla que se vea — al abrir la app o al preguntar por el gasto, no solo
+si se pregunta "¿cómo voy?" con esas palabras.
+
+Y el ciclo de acción que cierra la regla 3 del reto, ahora completo en las
+dos direcciones: el usuario pulsa "Crear límite de $X en Categoría" → el
+agente ejecuta `crear_limite_gasto` vía MCP (modifica estado guardado de
+verdad) → responde con una pantalla nueva confirmando el límite, ya medido
+contra el gasto real. Desde el diagnóstico, también se puede "Quitar
+límite" (`eliminar_limite_gasto`) — crear, ver el efecto, y ajustar o
+quitar es el mismo ciclo.
+
+Las cuatro intenciones y las dos acciones están conectadas de punta a punta
+contra el Bloque 1 real (sin mocks) y probadas con Gemini real.
 
 ## Estructura del repo
 
@@ -103,7 +118,7 @@ próximos pagos — lógica pura, sin FastMCP ni Gemini de por medio):
 ```bash
 cd backend
 pytest -q
-# 34 passed
+# 62 passed
 ```
 
 ### Nota de cuota de Gemini
