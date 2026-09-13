@@ -120,6 +120,30 @@ def crear_limite_gasto(categoria: str, monto_limite: float) -> dict:
 
 
 @mcp.tool()
+def eliminar_limite_gasto(categoria: str) -> dict:
+    """Quita el límite de gasto guardado de una categoría, si existe."""
+    return data.eliminar_limite_gasto(categoria)
+
+
+@mcp.tool()
+def obtener_limites_gasto() -> dict:
+    """Todos los límites de gasto guardados hasta ahora (sin recalcular nada
+    contra el gasto real -- para eso está `obtener_diagnostico_financiero`).
+    Wrapper delgado: se usa para cruzar límites contra un desglose que el
+    agente ya calculó, sin pagar el costo de recalcular todo el diagnóstico.
+
+    Devuelve {"limites": [...]}, NUNCA una lista pelona en el nivel
+    superior: FastMCP serializa un `list` de vuelta como un bloque de
+    contenido POR ELEMENTO (y ninguno si la lista está vacía), a
+    diferencia de un `dict`, que siempre llega como un solo bloque sin
+    importar qué tan anidado esté su contenido -- encontrado en vivo
+    probando esta misma tool. Envolver en un dict evita ese caso especial
+    en vez de tener que enseñarle a `_llamar_tool_mcp` a adivinar cuándo
+    una respuesta es "una lista" contra "un dict de un solo elemento"."""
+    return {"limites": data.obtener_limites_gasto()}
+
+
+@mcp.tool()
 def obtener_diagnostico_financiero(fecha_inicio: str, fecha_fin: str) -> dict:
     """Compara el periodo contra el anterior y evalúa límites (nivel de riesgo incluido)."""
     inicio = date.fromisoformat(fecha_inicio)

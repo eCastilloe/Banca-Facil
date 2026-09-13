@@ -155,3 +155,19 @@ def crear_limite_gasto(categoria: str, monto_limite: float) -> dict:
 def obtener_limites_gasto() -> list[dict]:
     """Todos los límites de gasto guardados hasta ahora."""
     return _leer_limites()
+
+
+def eliminar_limite_gasto(categoria: str) -> dict:
+    """Quita el límite guardado de una categoría, si existe.
+
+    Simétrico a `crear_limite_gasto`: mismo patrón de lectura/escritura
+    atómica. No es error borrar una categoría sin límite guardado -- el
+    resultado ya distingue ambos casos con `existia`, para que quien llama
+    decida si eso amerita un mensaje distinto.
+    """
+    limites = _leer_limites()
+    quedan = [l for l in limites if l["categoria"] != categoria]
+    existia = len(quedan) != len(limites)
+    if existia:
+        _guardar_limites(quedan)
+    return {"ok": True, "categoria": categoria, "existia": existia}

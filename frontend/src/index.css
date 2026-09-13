@@ -552,6 +552,32 @@ button:focus-visible, [role="button"]:focus-visible { outline: 3px solid var(--c
 
 .bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
 
+/* tabla: para cuando 4+ categorías están parejas y ninguna gráfica deja
+   comparar montos con precisión (ver agent.py, _decidir_ui) */
+
+.breakdown-body--table { display: flex; flex-direction: column; gap: 10px; }
+
+.cat-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.cat-table th {
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-ink-subtle);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  padding: 0 8px 6px;
+  border-bottom: 1px solid var(--color-border-soft);
+}
+.cat-table th:not(:first-child), .cat-table td:not(:first-child) { text-align: right; }
+.cat-table-row { cursor: pointer; transition: background 0.12s ease; }
+.cat-table-row:hover { background: var(--color-bg); }
+.cat-table td { padding: 8px; border-bottom: 1px solid var(--color-border-soft); vertical-align: middle; }
+.cat-table-row:last-child td { border-bottom: none; }
+.cat-table-label { display: flex; align-items: center; gap: 10px; font-weight: 500; color: var(--color-ink); }
+.cat-table-amount { font-weight: 700; color: var(--color-ink); white-space: nowrap; }
+.cat-table-percent { color: var(--color-ink-subtle); white-space: nowrap; }
+.cat-table-count { color: var(--color-ink-subtle); white-space: nowrap; }
+
 /* transaction list */
 
 .tx-list {

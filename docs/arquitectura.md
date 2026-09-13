@@ -34,16 +34,17 @@ flowchart LR
 2. **MCP para datos y acciones** (`backend/mcp_server/`): el agente nunca
    toca una transacción directamente. Todo pasa por tools registradas en un
    servidor MCP (`obtener_gasto_por_categoria`, `obtener_diagnostico_financiero`,
-   `obtener_proximos_pagos`, `crear_limite_gasto`), wrappers finos sobre la
-   capa de datos — sin lógica de negocio propia en el servidor.
+   `obtener_proximos_pagos`, `obtener_limites_gasto`, `crear_limite_gasto`,
+   `eliminar_limite_gasto`), wrappers finos sobre la capa de datos — sin
+   lógica de negocio propia en el servidor.
 3. **Protocolo de UI tipo A2UI**: el agente responde con un "envelope" JSON
    (`{version, intent, conversation_id, components, suggested_prompts}`)
    donde cada `component` tiene un `type` de un catálogo cerrado
-   (`pie_chart`, `bar_chart`, `transaction_list`, `text_block`, `progress`,
-   `risk_indicator`, `category_badge`, `action_button`). El frontend
-   resuelve `type` contra un registry de componentes React — agregar un
-   componente nuevo no requiere cambiar el contrato, solo registrar el
-   nuevo `type`.
+   (`pie_chart`, `bar_chart`, `table`, `transaction_list`, `text_block`,
+   `progress`, `risk_indicator`, `category_badge`, `action_button`). El
+   frontend resuelve `type` contra un registry de componentes React —
+   agregar un componente nuevo no requiere cambiar el contrato, solo
+   registrar el nuevo `type`.
 
 ## Las cuatro intenciones
 
@@ -52,18 +53,22 @@ agente interpretó la intención, no porque el usuario navegó a otro lado.
 
 | Intención | Pregunta de ejemplo | Qué arma | Llamadas a Gemini |
 |---|---|---|---|
-| `gasto_por_categoria` | "¿en qué gasté más este mes?" | `text_block` + `pie_chart`/`bar_chart` + `action_button` (si una categoría domina) | 2: router, y decidir pastel/barras |
-| `diagnostico_financiero` | "¿cómo voy este mes?" | `text_block` + `risk_indicator` + `category_badge` + `progress` | 1: solo el router — el resto se compone en Python |
+| `gasto_por_categoria` | "¿en qué gasté más este mes?" | `text_block` + `pie_chart`/`bar_chart`/`table` + `action_button` (si una categoría domina y no tiene límite) + aviso `risk_indicator` (si algún límite ya se excedió) | 2: router, y decidir la variante |
+| `diagnostico_financiero` | "¿cómo voy este mes?" | `text_block` + `risk_indicator` + `category_badge` + `progress` + `action_button` (quitar límite, si existe) | 1: solo el router — el resto se compone en Python |
 | `proximos_pagos` | "¿qué pagos tengo próximos?" | `text_block` + `transaction_list` | 1: solo el router |
 | `fuera_de_alcance` | "cuéntame un chiste" | `text_block` + `suggested_prompts` | 1: solo el router |
 | `event:"overview"` (abrir la app) | — | igual que `gasto_por_categoria`, mes actual | 1: se salta el router (ya se sabe la intención), pero sigue llamando a decidir UI |
-| `event:"action"` (`crear_limite_gasto`) | botón en la UI | `text_block` + `progress` (pantalla nueva) | 0 — puro MCP, ninguna llamada a Gemini |
+| `event:"action"` (`crear_limite_gasto` / `eliminar_limite_gasto`) | botón en la UI | `text_block` (+ `progress` al crear) — pantalla nueva | 0 — puro MCP, ninguna llamada a Gemini |
 
 El costo real es más bajo de lo que parece a primera vista: solo
 `gasto_por_categoria`/`overview` cuestan 2 llamadas; diagnóstico, pagos y el
-guardrail cuestan 1; la acción no cuesta nada. Esto importa porque la capa
-gratuita de Gemini da 20 solicitudes/día **por proyecto de Google Cloud**
-(no por API key — varias keys del mismo proyecto comparten el mismo cupo).
+guardrail cuestan 1; las acciones no cuestan nada. Esto importa porque la
+capa gratuita de Gemini da 20 solicitudes/día **por proyecto de Google
+Cloud** (no por API key — varias keys del mismo proyecto comparten el mismo
+cupo). El cruce contra límites guardados (para el aviso y para no sugerir
+un límite duplicado) agrega una tool MCP más (`obtener_limites_gasto`) a
+`gasto_por_categoria`/`overview` — sin costo de Gemini, solo una lectura de
+disco adicional dentro del mismo proceso MCP.
 
 ## Flujo de una consulta, paso a paso
 
@@ -90,12 +95,26 @@ gratuita de Gemini da 20 solicitudes/día **por proyecto de Google Cloud**
      según la tool (ver "Las cuatro intenciones" arriba).
 3. Solo para `gasto_por_categoria`: el agente le pide a Gemini (segunda
    llamada, estructurada, sin la lista de transacciones para no gastar
-   tokens) que decida entre `pie_chart` o `bar_chart` y escriba un mensaje
-   breve. Las otras tres intenciones componen su `text_block` en Python,
+   tokens) que decida la variante y escriba un mensaje breve. El criterio
+   usa umbrales numéricos explícitos, no "a juicio libre" del modelo:
+   `pie_chart` si una categoría se lleva ≥45% del total o dobla a la
+   segunda, `table` si hay 4+ categorías sin que ninguna le saque más de 15
+   puntos porcentuales a la siguiente (parejas y numerosas — ni pastel ni
+   barras dejan comparar montos con precisión ahí), `bar_chart` en
+   cualquier otro caso. Se encontró probando en vivo que un criterio vago
+   ("si dominan claramente") caía en `pie_chart` casi siempre con este
+   dataset sintético (Amazon/Liverpool, los comercios de Compras, tienen un
+   rango de montos mucho más ancho que el resto) — el umbral numérico lo
+   hace verificable y hace que el resultado varíe de verdad según el
+   periodo. Las otras tres intenciones componen su `text_block` en Python,
    directo de los números que ya regresó la tool — cero llamadas extra.
-4. El agente traduce el resultado a un envelope A2UI en inglés (el
-   contrato interno de clasificación vive en español; la traducción pasa
-   en esta frontera) y lo regresa al frontend.
+4. El agente cruza el gasto contra los límites guardados
+   (`obtener_limites_gasto`, sin costo de Gemini) y antepone un aviso
+   (`risk_indicator`) si alguno ya se excedió — así se ve en cuanto se abre
+   la app o se pregunta por el gasto, no solo si se pregunta "¿cómo voy?"
+   con esas palabras exactas. Traduce el resultado a un envelope A2UI en
+   inglés (el contrato interno de clasificación vive en español; la
+   traducción pasa en esta frontera) y lo regresa al frontend.
 5. El frontend renderiza. El click en una categoría expande sus
    transacciones **sin ninguna llamada de red nueva** — ya vinieron
    anidadas desde el paso 2. Es el punto más visible de una demo en vivo,
@@ -103,26 +122,34 @@ gratuita de Gemini da 20 solicitudes/día **por proyecto de Google Cloud**
 
 ## El ciclo cerrado: la acción real
 
-Aparte de las consultas (de solo lectura), existe una acción que sí
-modifica estado: crear un límite de gasto en una categoría. Esto es lo que
-el reto exige explícitamente — "cada interacción con la UI generada debe
+Aparte de las consultas (de solo lectura), existen dos acciones que sí
+modifican estado: crear y quitar un límite de gasto en una categoría (y
+crear de nuevo sobre la misma categoría ya actúa como "editar", porque
+`crear_limite_gasto` reemplaza el límite existente). Esto es lo que el
+reto exige explícitamente — "cada interacción con la UI generada debe
 volver al agente y producir nuevas acciones o una nueva interfaz", no basta
 con generar una pantalla una vez.
 
 1. Cuando responde `gasto_por_categoria`, si una categoría se lleva ≥30%
-   del gasto, el agente agrega un `action_button` sugiriendo un límite
-   (20% menos del gasto actual, redondeado a $50 — regla de negocio en
-   Python, no decisión del LLM).
-2. El usuario lo pulsa. El frontend manda
+   del gasto y no tiene ya un límite guardado, el agente agrega un
+   `action_button` sugiriendo uno nuevo (20% menos del gasto actual,
+   redondeado a $50 — regla de negocio en Python, no decisión del LLM). Si
+   ya tiene un límite y este se excedió, en vez de sugerir uno duplicado el
+   aviso de riesgo (ver arriba) ya cubre esa señal.
+2. El usuario pulsa el botón. El frontend manda
    `{event:"action", component_id, action_id, params}` al mismo `/chat`.
-3. El agente ejecuta `crear_limite_gasto` vía MCP — sin ninguna llamada a
-   Gemini, es una escritura directa a la capa de datos (persistida en
-   disco).
-4. El agente responde con **una pantalla nueva**: confirmación +
+3. El agente ejecuta `crear_limite_gasto` o `eliminar_limite_gasto` vía
+   MCP — sin ninguna llamada a Gemini, es una escritura directa a la capa
+   de datos (persistida en disco).
+4. El agente responde con **una pantalla nueva**: al crear, confirmación +
    `progress` mostrando el gasto real de esa categoría contra el límite
-   recién creado — no un `alert`, no un toast.
-5. La próxima vez que el usuario pregunte "¿cómo voy?", el `progress` del
-   diagnóstico se mide contra ese mismo límite.
+   recién creado; al quitar, confirmación de que ya no hay límite guardado
+   — nunca un `alert`, nunca un toast.
+5. La próxima vez que el usuario pregunte "¿cómo voy?", el diagnóstico ya
+   refleja ese límite (o su ausencia) — y desde esa misma pantalla, si hay
+   un límite guardado en la categoría de mayor gasto, aparece el botón
+   para quitarlo. Crear → ver el efecto → ajustar o quitar es el mismo
+   ciclo, no tres features distintas.
 
 Ese encadenamiento (intención → UI → acción → UI nueva → contexto para la
 siguiente intención) es el momento a demostrar en vivo.
@@ -282,3 +309,8 @@ creado por el usuario.
   seguimiento que dependa de la respuesta anterior (ej. "¿y solo en esa
   categoría?") no se interpreta como continuación, se vuelve a rutear desde
   cero.
+- **El aviso de límite excedido es reactivo, no una notificación real.**
+  Aparece en cuanto el usuario abre la app o pregunta algo — pero si nunca
+  vuelve a abrirla, no se entera. No hay push/email/SMS: eso es
+  infraestructura nueva, fuera del alcance de este reto (LLM + MCP + A2UI),
+  y una decisión consciente de no perseguir a horas de la presentación.
