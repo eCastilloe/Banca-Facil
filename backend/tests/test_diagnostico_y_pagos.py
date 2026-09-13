@@ -190,6 +190,25 @@ def test_proximos_pagos_detecta_recurrencia_en_2_de_3_meses(monkeypatch, cache_a
     assert pago["ocurrencias"] == 2
 
 
+def test_proximos_pagos_excluye_categorias_no_recurrentes_aunque_repitan(
+    monkeypatch, cache_aislada, hoy_fijo
+):
+    # WALMART repite 2 meses con montos parecidos -- pasaría el filtro
+    # estadístico, pero Despensa no es una categoría de gasto recurrente
+    # (es alguien que vuelve seguido a la tienda, no una suscripción).
+    transacciones = [
+        Transaccion(date(2026, 8, 9), "WALMART", 500.0, "compra"),
+        Transaccion(date(2026, 9, 9), "WALMART", 520.0, "compra"),
+    ]
+    monkeypatch.setattr(
+        "mcp_server.classification.data.obtener_transacciones", lambda ini, fin: transacciones
+    )
+
+    pagos = classification.obtener_proximos_pagos()
+
+    assert pagos["pagos"] == []
+
+
 def test_proximos_pagos_excluye_proyeccion_que_ya_paso(monkeypatch, cache_aislada, hoy_fijo):
     # Última vez en julio: la próxima proyectada (agosto) ya pasó respecto a
     # "hoy" (12 de septiembre) -- la recurrencia probablemente se cortó, o
