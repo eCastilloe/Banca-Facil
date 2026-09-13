@@ -502,6 +502,11 @@ def _progreso_diagnostico(diag: dict) -> dict | None:
                 "label": "Gasto vs el periodo anterior",
                 "value": diag["total_gastado"],
                 "max": anterior_total,
+                # No hay límite guardado -- esto es una referencia, no un
+                # presupuesto. "variant": "comparison" evita que el frontend
+                # diga "Has superado el objetivo" cuando no existe ningún
+                # objetivo que superar.
+                "variant": "comparison",
             },
         }
     return None
@@ -569,6 +574,11 @@ async def _handler_proximos_pagos(conversation_id: str) -> dict:
             "id": "pagos",
             "type": "transaction_list",
             "props": {
+                # Sin esto, TransactionList.tsx cae en su fallback "Todas las
+                # transacciones" -- correcto para un desglose por categoría,
+                # pero engañoso aquí (esto no es "todas", son solo los cargos
+                # recurrentes proyectados).
+                "category": {"id": "proximos_pagos", "label": "Pagos próximos"},
                 "period": {
                     "start": hoy.isoformat(),
                     "end": (hoy + timedelta(days=30)).isoformat(),
