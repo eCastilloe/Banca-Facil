@@ -1,24 +1,13 @@
-/**
- * Mapeo categoría → color. El backend NO manda colores (fue decisión
- * explícita del equipo dejarlo del lado del frontend) — esta es una
- * propuesta inicial, ajústenla libremente sin que eso afecte al backend
- * ni al contrato de datos.
- *
- * Los tonos salen directo del design system real de Banorte (extraídos de
- * banorte.com: --color_primario_100/300, --color_secundario_700,
- * --color_positivo_100, --color_aviso_100, --color_gris_500/300), para
- * que el desglose por categoría se sienta parte de la misma marca aunque
- * necesite más matices de los que ellos exponen para texto/botones.
- */
+/** Colores básicos por categoría, compartidos por gráfica y leyenda. */
 const PALETTE = [
-  "#EB0029", // despensa            — primario_100 (rojo Banorte)
-  "#323E48", // comida              — secundario_700 (tinta)
-  "#6CC04A", // transporte          — positivo_100 (verde)
-  "#F5BE64", // servicios           — aviso_100 (ámbar)
-  "#5B6670", // entretenimiento     — gris_600
-  "#8F0017", // compras             — primario_300 (rojo oscuro)
-  "#7B868C", // salud               — gris_500
-  "#C1C5C8", // otros/sin categorizar — gris_300
+  "#FACC15", // despensa: amarillo
+  "#F97316", // comida: naranja
+  "#16A34A", // transporte: verde
+  "#DC2626", // servicios: rojo
+  "#9333EA", // entretenimiento: morado
+  "#2563EB", // compras: azul
+  "#06B6D4", // salud: cian
+  "#64748B", // otros: gris
 ];
 
 const CATEGORY_ORDER = [
