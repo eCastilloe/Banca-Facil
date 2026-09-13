@@ -158,7 +158,7 @@ export default function App() {
             <div className="hero">
               <div className="hero-inner">
                 <p className="hero-eyebrow">{greeting()}</p>
-                <h1 className="hero-title">Entender mis gastos</h1>
+                <h1 className="hero-title">Entiende tus finanzas</h1>
                 <p className="hero-subtitle">{heroSubtitle}</p>
               </div>
             </div>

@@ -1,4 +1,4 @@
-/** Marco visual del agente; las pestañas adicionales se incorporarán después. */
+/** Marco visual V2 del agente; las pestañas adicionales se incorporarán después. */
 export function BankChrome() {
   return (
     <>
@@ -12,7 +12,7 @@ export function BankChrome() {
       </div>
       <div className="bank-tabs">
         <div className="bank-tabs-inner">
-          <span className="bank-tab bank-tab--active">Entender mis gastos</span>
+          <span className="bank-tab bank-tab--active">Entiende tus finanzas</span>
         </div>
       </div>
     </>

@@ -119,5 +119,28 @@ def crear_limite_gasto(categoria: str, monto_limite: float) -> dict:
     return data.crear_limite_gasto(categoria, monto_limite)
 
 
+@mcp.tool()
+def obtener_diagnostico_financiero(fecha_inicio: str, fecha_fin: str) -> dict:
+    """Compara el periodo contra el anterior y evalúa límites (nivel de riesgo incluido)."""
+    inicio = date.fromisoformat(fecha_inicio)
+    fin = date.fromisoformat(fecha_fin)
+    if fin < inicio:
+        raise ValueError("fecha_fin no puede ser anterior a fecha_inicio")
+
+    tope = fin - timedelta(days=TOPE_MESES * 31)
+    if inicio < tope:
+        inicio = tope
+
+    return classification.obtener_diagnostico_financiero(
+        inicio, fin, llm_classify_fn=_clasificar_con_gemini
+    )
+
+
+@mcp.tool()
+def obtener_proximos_pagos() -> dict:
+    """Cargos recurrentes detectados en los últimos 3 meses, con fecha y monto proyectados."""
+    return classification.obtener_proximos_pagos(llm_classify_fn=_clasificar_con_gemini)
+
+
 if __name__ == "__main__":
     mcp.run()
