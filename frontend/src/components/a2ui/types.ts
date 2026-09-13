@@ -5,7 +5,17 @@ export type OnAction = RendererProps['onAction'];
 export type Category = 'despensa' | 'comida' | 'transporte' | 'servicios' | 'entretenimiento' | 'compras' | 'salud' | 'otros';
 export type RiskLevel = 'low' | 'medium' | 'high';
 export type ChartProps = CategoryBreakdownProps;
-export type ProgressProps = { label: string; value: number; max: number };
+export type ProgressProps = {
+  label: string;
+  value: number;
+  max: number;
+  /** "budget" (default): `max` es un límite/presupuesto real que el usuario
+   * creó -- pasarse de ahí es "superar el objetivo". "comparison": `max` es
+   * solo una referencia (p. ej. el gasto del periodo anterior) sin que
+   * exista un presupuesto -- pasarse no es "superar" nada, solo gastar más
+   * que antes. */
+  variant?: 'budget' | 'comparison';
+};
 export type CategoryBadgeProps = { category: Category; label?: string };
 export type ActionButtonProps = {
   label: string;
