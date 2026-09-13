@@ -139,6 +139,15 @@ def _cliente() -> genai.Client:
 
 REINTENTOS_503 = 2
 ESPERA_503_SEGUNDOS = 1.5
+TIMEOUT_GEMINI_SEGUNDOS = 15  # por intento -- ver nota de timeouts más abajo
+
+
+class RespuestaModeloInvalida(RuntimeError):
+    """Gemini respondió, pero no pudimos interpretar el resultado (JSON roto,
+    contenido bloqueado por seguridad, etc.). Distinto de cuota/disponibilidad
+    a propósito: rotar de key o reintentar no arregla una respuesta que
+    simplemente no se pudo leer, así que cada llamador decide su propio
+    fallback en vez de que esto tumbe la consulta completa con un 500."""
 
 
 async def _generar_json(prompt: str, schema: types.Schema) -> Any:
@@ -153,25 +162,48 @@ async def _generar_json(prompt: str, schema: types.Schema) -> Any:
       de rendirse, en vez de propagar el error crudo al usuario en el
       primer bache pasajero (encontrado probando en vivo: dos 503
       seguidos tumbaron la consulta sin necesidad).
+    - Tardanza sin límite: sin timeout, una llamada que se cuelga (red
+      caída a medias, no un error limpio) deja la solicitud del usuario
+      esperando para siempre del lado del servidor, aunque el navegador ya
+      haya abortado por su cuenta -- cada `asyncio.wait_for` de aquí pone
+      un tope duro para que eso nunca pase.
+    - JSON roto / respuesta bloqueada: no es un problema de cuota ni de
+      disponibilidad, es que no se pudo interpretar lo que regresó. Se
+      convierte en `RespuestaModeloInvalida` para que cada llamador decida
+      su propio fallback (ver `_clasificar_intencion` y `_decidir_ui`).
     """
     global _key_actual
     for intento in range(REINTENTOS_503 + 1):
         try:
             for _ in range(len(_KEYS)):
                 try:
-                    response = await _cliente().aio.models.generate_content(
-                        model=MODEL,
-                        contents=prompt,
-                        config=types.GenerateContentConfig(
-                            response_mime_type="application/json",
-                            response_schema=schema,
+                    response = await asyncio.wait_for(
+                        _cliente().aio.models.generate_content(
+                            model=MODEL,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                response_schema=schema,
+                            ),
                         ),
+                        timeout=TIMEOUT_GEMINI_SEGUNDOS,
                     )
-                    return json.loads(response.text)
                 except genai_errors.ClientError as exc:
                     if exc.code != 429:
                         raise
                     _key_actual = (_key_actual + 1) % len(_KEYS)
+                    continue
+                except asyncio.TimeoutError as exc:
+                    raise RuntimeError(
+                        "Gemini tardó demasiado en responder. Intenta de nuevo."
+                    ) from exc
+
+                try:
+                    return json.loads(response.text)
+                except (ValueError, TypeError, json.JSONDecodeError) as exc:
+                    raise RespuestaModeloInvalida(
+                        "No se pudo interpretar la respuesta del modelo."
+                    ) from exc
             raise RuntimeError(
                 f"Se agotó la cuota diaria de las {len(_KEYS)} API keys configuradas."
             )
@@ -184,20 +216,39 @@ async def _generar_json(prompt: str, schema: types.Schema) -> Any:
             await asyncio.sleep(ESPERA_503_SEGUNDOS)
 
 
+TIMEOUT_MCP_SEGUNDOS = 20
+
+
 async def _llamar_tool_mcp(nombre: str, argumentos: dict[str, Any]) -> Any:
     # -m mcp_server.server (no la ruta del archivo): server.py usa imports
     # relativos hacia el Bloque 1 (`from . import classification, data`),
     # así que necesita correr como módulo del paquete `mcp_server`, con
     # `backend/` como cwd, para que esos imports no truenen.
-    params = StdioServerParameters(
-        command=sys.executable,
-        args=["-m", "mcp_server.server"],
-        cwd=str(BACKEND_DIR),
-    )
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            resultado = await session.call_tool(nombre, argumentos)
+    async def _ejecutar() -> Any:
+        params = StdioServerParameters(
+            command=sys.executable,
+            args=["-m", "mcp_server.server"],
+            cwd=str(BACKEND_DIR),
+        )
+        async with stdio_client(params) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                return await session.call_tool(nombre, argumentos)
+
+    # Se lanza un subproceso nuevo por llamada (ver docstring del módulo) --
+    # si ese subproceso no arranca, se cuelga esperando red adentro (ej. el
+    # fallback de clasificación a Gemini dentro de server.py), o el pipe de
+    # stdio se queda esperando, sin timeout esto cuelga la solicitud para
+    # siempre del lado del servidor y deja el proceso hijo como zombie. El
+    # wait_for cancela la tarea y con ella el `async with` de arriba, que se
+    # encarga de cerrar/matar el subproceso al salir.
+    try:
+        resultado = await asyncio.wait_for(_ejecutar(), timeout=TIMEOUT_MCP_SEGUNDOS)
+    except asyncio.TimeoutError as exc:
+        raise RuntimeError(
+            "El servidor de datos tardó demasiado en responder. Intenta de nuevo."
+        ) from exc
+
     if resultado.isError:
         detalle = resultado.content[0].text if resultado.content else "Error desconocido en tool MCP"
         raise RuntimeError(detalle)
@@ -260,7 +311,15 @@ fecha_fin (YYYY-MM-DD). Si no menciona fechas, usa el mes actual completo.
 Si la intención no necesita periodo, déjalos en null. No te preocupes por
 ningún límite máximo de rango: eso se aplica después."""
 
-    return await _generar_json(prompt, ROUTER_SCHEMA)
+    try:
+        return await _generar_json(prompt, ROUTER_SCHEMA)
+    except RespuestaModeloInvalida:
+        # No pudimos leer la clasificación (JSON roto, respuesta bloqueada,
+        # etc.) -- no es lo mismo que "no hay cuota", así que en vez de
+        # tumbar la consulta completa con un 500, se trata como una pregunta
+        # que este asistente no sabe responder. El usuario ve una pantalla
+        # normal con sugerencias, no un error críptico.
+        return {"intencion": "fuera_de_alcance"}
 
 
 def _aplicar_tope(solicitado_inicio: date, solicitado_fin: date) -> tuple[date, date, bool]:
@@ -301,7 +360,18 @@ Decide:
 - "mensaje": una frase breve (en español) describiendo el hallazgo
   principal para mostrarle al usuario."""
 
-    return await _generar_json(prompt, DECISION_UI_SCHEMA)
+    try:
+        return await _generar_json(prompt, DECISION_UI_SCHEMA)
+    except RespuestaModeloInvalida:
+        # Mismo principio que en _clasificar_intencion: los montos ya están
+        # calculados (son datos reales, no dependen de esta llamada), así
+        # que vale más mostrarlos con una gráfica/mensaje genéricos que
+        # tumbar toda la consulta porque el LLM no pudo decidir el detalle
+        # de presentación.
+        return {
+            "variante": "bar_chart",
+            "mensaje": "Aquí está tu desglose de gasto por categoría.",
+        }
 
 
 # --- Orquestación ------------------------------------------------------------
@@ -645,13 +715,23 @@ def _handler_fuera_de_alcance(conversation_id: str) -> dict:
 
 
 def _periodo_del_router(router: dict) -> tuple[date, date]:
-    """Fechas que resolvió el router, con el mes actual como red de seguridad."""
+    """Fechas que resolvió el router, con el mes actual como red de seguridad.
+
+    La misma red de seguridad cubre tanto un JSON mal formado como un rango
+    invertido (fecha_inicio posterior a fecha_fin) -- el router es un LLM
+    interpretando lenguaje natural, así que no se le confía ciegamente ni
+    siquiera cuando el JSON en sí es válido. Sin este chequeo, un rango
+    invertido llega tal cual hasta el servidor MCP, que lo rechaza con
+    ValueError y el usuario ve un 500 por lo que en el fondo es una
+    ambigüedad de lenguaje, no un error real.
+    """
     hoy = date.today()
     try:
-        return (
-            date.fromisoformat(router["fecha_inicio"]),
-            date.fromisoformat(router["fecha_fin"]),
-        )
+        inicio = date.fromisoformat(router["fecha_inicio"])
+        fin = date.fromisoformat(router["fecha_fin"])
+        if inicio > fin:
+            raise ValueError("fecha_inicio posterior a fecha_fin")
+        return inicio, fin
     except (KeyError, TypeError, ValueError):
         return hoy.replace(day=1), hoy
 
@@ -694,12 +774,19 @@ async def _responder_accion(action_id: str, params: dict[str, Any], conversation
         raise HTTPException(status_code=400, detail=f"Acción no soportada: {action_id}")
 
     categoria = params.get("categoria")
-    monto_limite = params.get("monto_limite")
-    if not categoria or not monto_limite:
+    monto_limite_crudo = params.get("monto_limite")
+    if not categoria or monto_limite_crudo is None:
         raise HTTPException(status_code=400, detail="Faltan 'categoria' o 'monto_limite'")
 
+    try:
+        monto_limite = float(monto_limite_crudo)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="'monto_limite' debe ser un número") from None
+    if monto_limite <= 0:
+        raise HTTPException(status_code=400, detail="'monto_limite' debe ser positivo")
+
     await _llamar_tool_mcp(
-        "crear_limite_gasto", {"categoria": categoria, "monto_limite": float(monto_limite)}
+        "crear_limite_gasto", {"categoria": categoria, "monto_limite": monto_limite}
     )
 
     # Cuánto lleva gastado en esa categoría este mes, para que la
@@ -718,7 +805,7 @@ async def _responder_accion(action_id: str, params: dict[str, Any], conversation
         [
             _texto(
                 "confirmacion",
-                f"Listo, te aviso si {etiqueta} pasa de ${float(monto_limite):,.0f}.",
+                f"Listo, te aviso si {etiqueta} pasa de ${monto_limite:,.0f}.",
             ),
             {
                 "id": "limite_progreso",
@@ -726,7 +813,7 @@ async def _responder_accion(action_id: str, params: dict[str, Any], conversation
                 "props": {
                     "label": f"{etiqueta} este mes",
                     "value": gastado,
-                    "max": float(monto_limite),
+                    "max": monto_limite,
                 },
             },
         ],
