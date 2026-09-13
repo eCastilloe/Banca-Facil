@@ -140,3 +140,6 @@
   .hero-eyebrow, .hero-subtitle { margin-block: 3px; }
   .bank-main-inner { min-height: 54px; }
 }
+
+/* La única sección se mantiene visible también en móvil. */
+.bank-segments.bank-segments--agent { display: flex; }
