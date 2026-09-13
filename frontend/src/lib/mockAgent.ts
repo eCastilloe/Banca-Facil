@@ -150,6 +150,19 @@ export function mockMessage(conversationId: string, message: string): A2UIEnvelo
     return { ...mockOverview(conversationId), version: 'invalid' };
   }
 
+  if (
+    query.includes('como voy') || query.includes('cómo voy') || query.includes('voy bien')
+    || query.includes('diagnostico') || query.includes('diagnóstico') || query.includes('riesgo')
+  ) {
+    return mockDiagnostico(conversationId);
+  }
+  if (
+    query.includes('pago') || query.includes('recurrente')
+    || query.includes('suscripcion') || query.includes('suscripción')
+  ) {
+    return mockProximosPagos(conversationId);
+  }
+
   const categoryId = matchCategoryFromText(query);
   if (categoryId) return mockCategoryDetail(conversationId, categoryId);
 
@@ -202,6 +215,108 @@ export function mockTopCategoryDetail(conversationId: string): A2UIEnvelope {
     },
   });
   return envelope;
+}
+
+/** Simula el diagnóstico financiero (mismos componentes que arma el
+ * backend real: text_block + risk_indicator + category_badge + progress
+ * contra el límite guardado, ver docs/ui-protocol.md). */
+export function mockDiagnostico(conversationId: string): A2UIEnvelope {
+  return {
+    version: "1.0",
+    intent: "diagnostico_financiero",
+    conversation_id: conversationId,
+    components: [
+      {
+        id: "diagnostico",
+        type: "text_block",
+        props: { title: "Llevas $9,420 gastados, 12% más que el periodo anterior." },
+      },
+      {
+        id: "riesgo",
+        type: "risk_indicator",
+        props: {
+          level: "medium",
+          label: "Te estás acercando a un límite",
+          description: "Llevas 84% del límite de Compras.",
+        },
+      },
+      {
+        id: "mayor_gasto",
+        type: "category_badge",
+        props: { category: "compras", label: "Mayor gasto: Compras" },
+      },
+      {
+        id: "limite_progreso",
+        type: "progress",
+        props: { label: "Compras vs tu límite", value: 2520, max: 3000 },
+      },
+    ],
+    suggested_prompts: ["¿En qué gasté más este mes?", "¿Qué pagos tengo próximos?"],
+  };
+}
+
+/** Simula los próximos pagos (mismos componentes que el backend real:
+ * text_block + transaction_list con las fechas/montos proyectados). */
+export function mockProximosPagos(conversationId: string): A2UIEnvelope {
+  const pagos: TransactionItem[] = [
+    { id: "p1", date: "2026-09-22", description: "NETFLIX", amount: -180.5 },
+    { id: "p2", date: "2026-09-28", description: "SPOTIFY", amount: -143.27 },
+    { id: "p3", date: "2026-10-05", description: "TELMEX", amount: -508.46 },
+  ];
+  const total = pagos.reduce((sum, p) => sum + Math.abs(p.amount), 0);
+  return {
+    version: "1.0",
+    intent: "proximos_pagos",
+    conversation_id: conversationId,
+    components: [
+      {
+        id: "insight",
+        type: "text_block",
+        props: { title: `Tienes ${pagos.length} cargos recurrentes detectados.` },
+      },
+      {
+        id: "pagos",
+        type: "transaction_list",
+        props: {
+          period: { start: "2026-09-12", end: "2026-10-12", label: "Próximos 30 días (estimado)" },
+          total,
+          transactions: pagos,
+        },
+      },
+    ],
+    suggested_prompts: ["¿En qué gasté más este mes?", "¿Cómo voy este mes?"],
+  };
+}
+
+/** Simula la respuesta de crear_limite_gasto (event:"action") -- lo que
+ * cierra el ciclo: confirmación + progreso contra el límite recién creado. */
+export function mockLimiteCreado(
+  conversationId: string,
+  categoria: string,
+  montoLimite: number,
+): A2UIEnvelope {
+  return {
+    version: "1.0",
+    intent: "limite_creado",
+    conversation_id: conversationId,
+    components: [
+      {
+        id: "confirmacion",
+        type: "text_block",
+        props: { title: `Listo, te aviso si ${categoria} pasa de ${formatMXN(montoLimite)}.` },
+      },
+      {
+        id: "limite_progreso",
+        type: "progress",
+        props: {
+          label: `${categoria} este mes`,
+          value: Math.round(montoLimite * 0.7),
+          max: montoLimite,
+        },
+      },
+    ],
+    suggested_prompts: ["¿Cómo voy este mes?", "¿En qué gasté más?"],
+  };
 }
 
 /** Todas las transacciones del periodo, sin filtrar por categoría —

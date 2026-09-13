@@ -15,6 +15,13 @@ export function parseEnvelope(input: unknown, conversationId: string): A2UIEnvel
     || data.conversation_id !== conversationId || !Array.isArray(data.components)) {
     throw new Error('La respuesta no cumple el contrato A2UI 1.0 de esta conversación.');
   }
+  // App.tsx hace `suggested_prompts.map(...)` sin resguardo -- si esto no
+  // fuera un arreglo (ej. viniera como string suelto), tronaría el render
+  // completo en vez de solo esta respuesta. Mejor rechazarlo aquí.
+  if (data.suggested_prompts !== undefined
+    && (!Array.isArray(data.suggested_prompts) || !data.suggested_prompts.every(text))) {
+    throw new Error('La respuesta contiene suggested_prompts inválidos.');
+  }
   const ids = new Set<string>();
   for (const component of data.components) {
     if (!object(component) || !text(component.id) || !text(component.type) || !object(component.props)
