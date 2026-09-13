@@ -284,6 +284,15 @@ def obtener_diagnostico_financiero(
 DISPERSION_MAXIMA = 0.8
 MESES_HISTORIAL_PAGOS = 3
 
+# "≥2 de 3 meses con monto parecido" no alcanza para distinguir una
+# suscripción real de una tienda a la que simplemente vuelves seguido
+# (Starbucks y Spotify tienen una firma estadística casi idéntica: monto
+# angosto, aparece cada mes). Restringir a las categorías que por
+# definición son gasto recurrente -- mismo principio que el diccionario de
+# clasificación: usar lo que ya sabemos del dominio en vez de solo
+# estadística sobre los montos.
+CATEGORIAS_RECURRENTES = {"Servicios", "Entretenimiento/Suscripciones"}
+
 
 def _sumar_un_mes(fecha: date) -> date:
     """Mismo día del mes siguiente, recortado si ese mes es más corto."""
@@ -298,10 +307,12 @@ def _sumar_un_mes(fecha: date) -> date:
 def obtener_proximos_pagos(llm_classify_fn: LLMClassifyFn | None = None) -> dict:
     """Contrato en CLAUDE.md, sección 11.2.
 
-    Detecta cargos recurrentes en los últimos 3 meses (mismo comercio en al
-    menos 2 meses distintos, con montos parecidos) y proyecta la próxima
-    fecha y monto. Sale de las transacciones que ya existen -- no inventa un
-    dominio de datos nuevo ni persiste nada.
+    Detecta cargos recurrentes en los últimos 3 meses -- mismo comercio en
+    al menos 2 meses distintos, con montos parecidos, Y clasificado en una
+    categoría de gasto recurrente por naturaleza (Servicios,
+    Entretenimiento/Suscripciones) -- y proyecta la próxima fecha y monto.
+    Sale de las transacciones que ya existen -- no inventa un dominio de
+    datos nuevo ni persiste nada.
     """
     hoy = date.today()
     inicio = hoy - timedelta(days=30 * MESES_HISTORIAL_PAGOS)
@@ -313,8 +324,17 @@ def obtener_proximos_pagos(llm_classify_fn: LLMClassifyFn | None = None) -> dict
     for t in transacciones:
         por_comercio.setdefault(t.comercio, []).append(t)
 
+    # Clasificar antes de filtrar por recurrencia: la categoría es la
+    # primera criba (¿este comercio siquiera puede ser un cargo fijo?), más
+    # barata que calcular dispersión de montos para algo que se va a
+    # descartar de todas formas.
+    categoria_por_concepto = clasificar_conceptos(sorted(por_comercio), llm_classify_fn)
+
     candidatos = []
     for comercio, movimientos in por_comercio.items():
+        if categoria_por_concepto[comercio] not in CATEGORIAS_RECURRENTES:
+            continue
+
         meses_distintos = {(t.fecha.year, t.fecha.month) for t in movimientos}
         if len(meses_distintos) < 2:
             continue
@@ -342,9 +362,6 @@ def obtener_proximos_pagos(llm_classify_fn: LLMClassifyFn | None = None) -> dict
                 "ocurrencias": len(movimientos),
             }
         )
-
-    conceptos_unicos = sorted({c["comercio"] for c in candidatos})
-    categoria_por_concepto = clasificar_conceptos(conceptos_unicos, llm_classify_fn)
 
     pagos = [
         {
