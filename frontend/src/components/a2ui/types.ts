@@ -29,6 +29,7 @@ export type TextBlockProps = { title: string; subtitle?: string };
 export type ComponentPropsMap = {
   PieChart: ChartProps;
   BarChart: ChartProps;
+  Table: ChartProps;
   Progress: ProgressProps;
   CategoryBadge: CategoryBadgeProps;
   ActionButton: ActionButtonProps;
