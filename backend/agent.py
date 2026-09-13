@@ -46,6 +46,7 @@ servidor -- ver requirements.txt).
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import sys
@@ -136,31 +137,51 @@ def _cliente() -> genai.Client:
     return _clientes[_key_actual]
 
 
-async def _generar_json(prompt: str, schema: types.Schema) -> Any:
-    """Una llamada a Gemini con salida JSON estructurada, rotando de key al 429.
+REINTENTOS_503 = 2
+ESPERA_503_SEGUNDOS = 1.5
 
-    Todas las llamadas al modelo pasan por aquí: así la rotación aplica a
-    todo el agente sin repetir el manejo de cuota en cada sitio.
+
+async def _generar_json(prompt: str, schema: types.Schema) -> Any:
+    """Una llamada a Gemini con salida JSON estructurada.
+
+    Todas las llamadas al modelo pasan por aquí: así el manejo de errores
+    aplica a todo el agente sin repetirlo en cada sitio.
+
+    - 429 (cuota agotada): rota a la siguiente key configurada.
+    - 503 (alta demanda): Google mismo lo documenta como "usually
+      temporary" -- reintenta un par de veces con una espera corta antes
+      de rendirse, en vez de propagar el error crudo al usuario en el
+      primer bache pasajero (encontrado probando en vivo: dos 503
+      seguidos tumbaron la consulta sin necesidad).
     """
     global _key_actual
-    for _ in range(len(_KEYS)):
+    for intento in range(REINTENTOS_503 + 1):
         try:
-            response = await _cliente().aio.models.generate_content(
-                model=MODEL,
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json",
-                    response_schema=schema,
-                ),
+            for _ in range(len(_KEYS)):
+                try:
+                    response = await _cliente().aio.models.generate_content(
+                        model=MODEL,
+                        contents=prompt,
+                        config=types.GenerateContentConfig(
+                            response_mime_type="application/json",
+                            response_schema=schema,
+                        ),
+                    )
+                    return json.loads(response.text)
+                except genai_errors.ClientError as exc:
+                    if exc.code != 429:
+                        raise
+                    _key_actual = (_key_actual + 1) % len(_KEYS)
+            raise RuntimeError(
+                f"Se agotó la cuota diaria de las {len(_KEYS)} API keys configuradas."
             )
-            return json.loads(response.text)
-        except genai_errors.ClientError as exc:
-            if exc.code != 429:
-                raise
-            _key_actual = (_key_actual + 1) % len(_KEYS)
-    raise RuntimeError(
-        f"Se agotó la cuota diaria de las {len(_KEYS)} API keys configuradas."
-    )
+        except genai_errors.ServerError as exc:
+            if exc.code != 503 or intento == REINTENTOS_503:
+                raise RuntimeError(
+                    "Gemini no está disponible en este momento (alta demanda). "
+                    "Intenta de nuevo en unos segundos."
+                ) from exc
+            await asyncio.sleep(ESPERA_503_SEGUNDOS)
 
 
 async def _llamar_tool_mcp(nombre: str, argumentos: dict[str, Any]) -> Any:
