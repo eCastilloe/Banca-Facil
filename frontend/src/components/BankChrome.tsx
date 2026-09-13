@@ -5,9 +5,10 @@ import { useEffect, useRef } from "react";
  * explícito del equipo: que esto se sienta como una pestaña más dentro de
  * banorte.com, no como una app aparte.
  *
- * Marco visual inspirado en banorte.com con su logo público.
- * Todo lo que no sea "Entender mis gastos" es
- * decorativo/inerte: no construimos esas secciones, solo el marco visual.
+ * Marco visual inspirado en banorte.com, con su logo público (decisión de
+ * equipo — se usa el diseño V2 de Jorge). Todo lo que no sea "Entiende tus
+ * finanzas" es decorativo/inerte: no construimos esas secciones, solo el
+ * marco visual.
  */
 const SEGMENTS = ["Personal", "Empresas", "PyME", "Gobierno"];
 const PRODUCT_TABS = ["Cuentas", "Tarjetas", "Créditos", "Seguros", "Inversión"];
@@ -65,7 +66,7 @@ export function BankChrome() {
             </span>
           ))}
           <span ref={activeTabRef} className="bank-tab bank-tab--active">
-            Entender mis gastos
+            Entiende tus finanzas
           </span>
         </div>
       </div>
